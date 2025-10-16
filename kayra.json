@@ -1,0 +1,16 @@
+{
+  "name": "KayraPHP",
+  "version": "1.0.0",
+  "description": "Performance-first PHP Framework",
+  "providers": [
+    "App\\Providers\\AppServiceProvider"
+  ],
+  "commands": [
+    "Kayra\\Console\\Commands\\ServeCommand",
+    "Kayra\\Console\\Commands\\MakeControllerCommand",
+    "Kayra\\Console\\Commands\\CacheClearCommand",
+    "Kayra\\Console\\Commands\\KeyGenerateCommand",
+    "Kayra\\Console\\Commands\\RouteListCommand",
+    "Kayra\\Console\\Commands\\OptimizeCommand"
+  ]
+}
