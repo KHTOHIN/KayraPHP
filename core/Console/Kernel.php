@@ -29,23 +29,64 @@ class Kernel
         ]);
     }
 
+    /**
+     * Register command mappings.
+     */
     protected function register(array $commands): void
     {
         $this->commands = $commands;
     }
 
+    /**
+     * Handle CLI input.
+     */
     public function handle(array $argv): void
     {
         $command = $argv[1] ?? 'list';
         $args = array_slice($argv, 2);
 
         if (!isset($this->commands[$command])) {
-            echo "Command '{$command}' not found.\n\n";
-            $this->commands['list']::run($this->app, []);
+            $this->printError("Command '{$command}' not found.");
+            $this->runListCommand();
             return;
         }
 
         $class = $this->commands[$command];
+
+        if (!class_exists($class)) {
+            $this->printError("Command class not found: {$class}");
+            return;
+        }
+
+        if (!method_exists($class, 'run')) {
+            $this->printError("Invalid command: {$class} must implement static run(Application \$app, array \$args).");
+            return;
+        }
+
         $class::run($this->app, $args);
+    }
+
+    /**
+     * Print a styled error message.
+     */
+    protected function printError(string $message): void
+    {
+        echo "❌ {$message}\n\n";
+    }
+
+    /**
+     * Fallback to the list command when invalid input.
+     */
+    protected function runListCommand(): void
+    {
+        if (isset($this->commands['list'])) {
+            $list = $this->commands['list'];
+            $list::run($this->app, []);
+        } else {
+            echo "Available commands:\n";
+            foreach (array_keys($this->commands) as $cmd) {
+                echo "  - {$cmd}\n";
+            }
+        }
     }
 }
