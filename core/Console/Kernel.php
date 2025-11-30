@@ -21,12 +21,42 @@ class Kernel
         $this->app = $app;
 
         $this->register([
-            'list'          => ListCommand::class,
-            'key:generate'  => KeyGenerateCommand::class,
-            'cache:clear'   => CacheClearCommand::class,
-            'route:list'    => RouteListCommand::class,
-            'serve'         => ServeCommand::class,
+            'list'              => ListCommand::class,
+            'key:generate'      => KeyGenerateCommand::class,
+            'cache:clear'       => CacheClearCommand::class,
+            'route:list'        => RouteListCommand::class,
+            'serve'             => ServeCommand::class,
+            'make:controller'   => MakeControllerCommand::class,
+            'make:model'        => MakeModelCommand::class,
+            'migrate'           => MigrateCommand::class,
+            'container:compile' => ContainerCompileCommand::class,
         ]);
+    }
+
+    /**
+     * Static method to compile the container during composer post-autoload-dump
+     */
+    public static function compileContainer(): void
+    {
+        $basePath = dirname(__DIR__, 3); // Go up 3 levels from core/Console/Kernel.php
+
+        // Load config files
+        $configs = [];
+        foreach (['app', 'cache', 'database', 'storage'] as $config) {
+            $configFile = "{$basePath}/config/{$config}.php";
+            if (file_exists($configFile)) {
+                $configs[$config] = require $configFile;
+            }
+        }
+
+        // Create container and compiler
+        $container = new \Kayra\Container\Container();
+        $compiler = new \Kayra\Container\Compiler($container);
+
+        // Compile basic services
+        $compiler->compileBasicServices($configs);
+
+        echo "Container compiled successfully.\n";
     }
 
     /**

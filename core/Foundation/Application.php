@@ -8,6 +8,7 @@ class Application
     protected array $bindings = [];
     protected array $instances = [];
     protected bool $booted = false;
+    protected ?Patterns\ArchitecturePattern $architecturePattern = null;
 
     public function __construct(string $basePath)
     {
@@ -73,8 +74,39 @@ class Application
         $this->singleton('app', fn() => $this);
         $this->singleton(\Kayra\Http\Request::class, fn() => \Kayra\Http\Request::capture());
         $this->singleton(\Kayra\Http\Response::class, fn() => new \Kayra\Http\Response());
-        $this->singleton(\Kayra\Http\Router::class, fn() => new \Kayra\Http\Router($this));
+
+        // Initialize architecture pattern
+        $this->initializeArchitecturePattern();
 
         $this->booted = true;
+    }
+
+    /**
+     * Initialize the architecture pattern
+     */
+    protected function initializeArchitecturePattern(): void
+    {
+        // Create the architecture pattern
+        $this->architecturePattern = Patterns\ArchitecturePatternFactory::create($this);
+
+        // Initialize the pattern
+        $this->architecturePattern->initialize($this);
+
+        // Configure the pattern
+        $this->architecturePattern->configureModuleLoading($this);
+        $this->architecturePattern->configureAutoloadNamespaces($this);
+        $this->architecturePattern->configureRouting($this);
+    }
+
+    /**
+     * Get the architecture pattern
+     */
+    public function getArchitecturePattern(): Patterns\ArchitecturePattern
+    {
+        if ($this->architecturePattern === null) {
+            $this->initializeArchitecturePattern();
+        }
+
+        return $this->architecturePattern;
     }
 }

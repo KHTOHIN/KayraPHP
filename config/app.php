@@ -8,6 +8,7 @@ return [
     'key' => env('APP_KEY'),
     'timezone' => 'UTC',
     'locale' => 'en',
+    'architecture' => env('APP_ARCHITECTURE', 'mvc'), // Options: mvc, factory-service, domain-driven, custom
     'providers' => [
         App\Providers\AppServiceProvider::class,
     ],

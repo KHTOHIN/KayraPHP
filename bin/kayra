@@ -2,6 +2,7 @@
 <?php
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../core/Utils/Helpers.php';
 
 use Kayra\Foundation\Application;
 use Kayra\Console\Kernel;

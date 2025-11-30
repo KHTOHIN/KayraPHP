@@ -15,13 +15,22 @@ class Router
     }
 
     /**
-     * Load all route files (web.php, api.php, etc.)
+     * Load route files
+     * 
+     * @param array|null $routeFiles Optional array of route file paths to load
      */
-    public function loadRoutes(): void
+    public function loadRoutes(array $routeFiles = null): void
     {
-        $routeDir = $this->app->basePath() . '/routes';
-        foreach (['web.php', 'api.php'] as $file) {
-            $path = $routeDir . '/' . $file;
+        if ($routeFiles === null) {
+            // Default route files
+            $routeDir = $this->app->basePath() . '/routes';
+            $routeFiles = [
+                $routeDir . '/web.php',
+                $routeDir . '/api.php',
+            ];
+        }
+
+        foreach ($routeFiles as $path) {
             if (file_exists($path)) {
                 $routes = require $path;
                 $this->routes = array_merge_recursive($this->routes, $routes);
