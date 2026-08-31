@@ -1,81 +1,95 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kayra\Console\Commands;
 
-use Kayra\Foundation\Application;
+use Kayra\Console\Command;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Input\InputOption;
 
-class ServeCommand
+#[AsCommand(name: 'serve', description: 'Run the development server')]
+final class ServeCommand extends Command
 {
-    public static function run(Application $app, array $args): void
+    protected function configure(): void
     {
-        $host = $args['--host'] ?? '127.0.0.1';
-        $port = $args['--port'] ?? 8000;
-        $publicDir = $app->basePath() . '/public';
-        $mode = $args['--mode'] ?? 'standard'; // standard or ultra
+        $this
+            ->addOption('host', null, InputOption::VALUE_REQUIRED, 'Host to bind', '127.0.0.1')
+            ->addOption('port', 'p', InputOption::VALUE_REQUIRED, 'Port to bind', '8000')
+            ->addOption('tries', null, InputOption::VALUE_REQUIRED, 'Ports to try if the first is busy', '10');
+    }
 
-        if (!is_dir($publicDir)) {
-            echo "❌ Error: Public directory not found at {$publicDir}\n";
-            exit(1);
+    protected function run_(): int
+    {
+        $host = (string) $this->option('host');
+        $port = (int) $this->option('port');
+        $tries = max(1, (int) $this->option('tries'));
+
+        $port = $this->availablePort($host, $port, $tries);
+
+        if ($port === null) {
+            $this->io->error("No free port found starting at {$this->option('port')}.");
+
+            return self::FAILURE;
         }
 
-        // Check for ultra mode with Swoole
-        if ($mode === 'ultra' && extension_loaded('swoole')) {
-            self::startSwooleServer($app, $host, $port, $publicDir);
-        } else {
-            // Fallback to standard PHP server
-            if ($mode === 'ultra') {
-                echo "⚠️ Ultra mode requested but Swoole extension not available. Falling back to standard mode.\n";
-                echo "   Install Swoole extension for better performance.\n\n";
-            }
+        $root = $this->app->publicPath();
 
-            echo "🚀 Starting Kayra development server (standard mode)\n";
-            echo "👉 URL: http://{$host}:{$port}\n";
-            echo "📂 Serving from: {$publicDir}\n";
-            echo "Press Ctrl+C to stop.\n\n";
+        $this->io->writeln('');
+        $this->io->writeln("  <fg=magenta;options=bold>KayraPHP</> <fg=gray>" . \Kayra\Foundation\Application::VERSION . "</>");
+        $this->io->writeln('');
+        $this->io->writeln("  <fg=green>➜</>  URL:      <href=http://{$host}:{$port}>http://{$host}:{$port}</>");
+        $this->io->writeln("  <fg=green>➜</>  Root:     {$this->relative($root)}");
+        $this->io->writeln("  <fg=green>➜</>  Env:      {$this->app->environment()}");
+        $this->io->writeln("  <fg=green>➜</>  PHP:      " . PHP_VERSION);
+        $this->io->writeln('');
+        $this->io->writeln('  <fg=gray>Press Ctrl+C to stop.</>');
+        $this->io->writeln('');
 
-            $cmd = sprintf('php -S %s:%d -t %s', $host, $port, $publicDir);
-            passthru($cmd);
+        // The router script re-serves existing static files itself; see public/index.php.
+        $command = [
+            PHP_BINARY,
+            '-d', 'variables_order=EGPCS',
+            '-S', "{$host}:{$port}",
+            '-t', $root,
+            $root . DIRECTORY_SEPARATOR . 'index.php',
+        ];
+
+        $process = proc_open(
+            $command,
+            [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+            $pipes,
+            $this->app->basePath(),
+        );
+
+        if (!is_resource($process)) {
+            $this->io->error('Unable to start the PHP development server.');
+
+            return self::FAILURE;
         }
+
+        return proc_close($process) === 0 ? self::SUCCESS : self::FAILURE;
     }
 
     /**
-     * Start a Swoole HTTP server for ultra performance
+     * Find a port that is not already in use.
      */
-    private static function startSwooleServer(Application $app, string $host, int $port, string $publicDir): void
+    private function availablePort(string $host, int $start, int $tries): ?int
     {
-        echo "🚀 Starting Kayra development server (ultra mode with Swoole)\n";
-        echo "👉 URL: http://{$host}:{$port}\n";
-        echo "📂 Serving from: {$publicDir}\n";
-        echo "Press Ctrl+C to stop.\n\n";
+        for ($port = $start; $port < $start + $tries; $port++) {
+            $socket = @fsockopen($host, $port, $errno, $errstr, 0.2);
 
-        // Create Swoole HTTP server
-        $server = new \Swoole\HTTP\Server($host, $port);
+            if ($socket === false) {
+                return $port;
+            }
 
-        // Configure server
-        $server->set([
-            'worker_num' => 4,
-            'task_worker_num' => 2,
-            'document_root' => $publicDir,
-            'enable_static_handler' => true,
-        ]);
+            fclose($socket);
 
-        // Handle requests
-        $server->on('request', function (\Swoole\Http\Request $swooleRequest, \Swoole\Http\Response $swooleResponse) use ($app) {
-            // Convert Swoole request to Kayra request
-            $request = \Kayra\Http\Request::createFromSwoole($swooleRequest);
+            if ($port === $start) {
+                $this->io->warning("Port {$port} is in use, trying the next one.");
+            }
+        }
 
-            // Get application instance
-            $app->boot();
-
-            // Handle the request
-            $response = require __DIR__ . '/../../../../bootstrap/kernel.php';
-            $response = handleRequest($request, $app);
-
-            // Send response back to client
-            $response->sendToSwoole($swooleResponse);
-        });
-
-        // Start server
-        $server->start();
+        return null;
     }
 }

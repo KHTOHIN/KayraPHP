@@ -1,46 +1,37 @@
 <?php
 
-use Kayra\Foundation\Application;
-use Kayra\Http\Request;
-use Kayra\Http\Response;
+declare(strict_types=1);
 
-// -------------------------------------------------------
-// 1. Autoload
-// -------------------------------------------------------
-require __DIR__ . '/../vendor/autoload.php';
+/*
+|--------------------------------------------------------------------------
+| KayraPHP — HTTP entry point
+|--------------------------------------------------------------------------
+|
+| Every web request enters here. The work is:
+|
+|   autoload -> build the application -> hand the kernel to the runtime
+|
+| The runtime decides how requests arrive (one per process under php-fpm, many
+| per process under Swoole), so this file does not change between them.
+|
+*/
 
-// -------------------------------------------------------
-// 2. Load Helpers
-// -------------------------------------------------------
-require __DIR__ . '/../core/Utils/helpers.php';
+use Kayra\Http\Kernel;
+use Kayra\Runtime\RuntimeInterface;
 
-// -------------------------------------------------------
-// 3. Set Error Reporting Based on Environment
-// -------------------------------------------------------
-if (is_dev()) {
-    ini_set('display_errors', '1');
-    error_reporting(E_ALL);
-} else {
-    ini_set('display_errors', '0');
-    error_reporting(0);
+// The built-in PHP development server has no rewrite rules of its own; serve
+// existing files directly and let everything else fall through to the router.
+if (PHP_SAPI === 'cli-server') {
+    $file = __DIR__ . parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+
+    if (is_file($file) && !str_ends_with($file, '.php')) {
+        return false;
+    }
 }
 
-// -------------------------------------------------------
-// 4. Bootstrap Application
-// -------------------------------------------------------
-$app = require __DIR__ . '/../bootstrap/app.php';
-$app->boot();
+require dirname(__DIR__) . '/vendor/autoload.php';
 
-// -------------------------------------------------------
-// 5. Prepare Request and Handle It
-// -------------------------------------------------------
-$request = Request::createFromGlobals();
+/** @var Kayra\Foundation\Application $app */
+$app = require dirname(__DIR__) . '/bootstrap/app.php';
 
-$kernel = require __DIR__ . '/../bootstrap/kernel.php';
-
-$response = handleRequest($request, $app);
-
-// -------------------------------------------------------
-// 6. Send Response
-// -------------------------------------------------------
-$response->send();
+$app->get(RuntimeInterface::class)->run($app->get(Kernel::class));

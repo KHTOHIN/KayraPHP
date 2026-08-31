@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{namespace}};
+
+/**
+ * Data access for {{name}}.
+ */
+final class {{class}}
+{
+}

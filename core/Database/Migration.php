@@ -1,48 +1,54 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kayra\Database;
 
-use PDO;
-
-class Migration
+/**
+ * Base class for a migration.
+ *
+ * A migration describes one reversible change. `down()` is not optional
+ * decoration: a migration that cannot be undone turns a bad deploy into a
+ * restore-from-backup, so the base class makes writing it the default rather
+ * than an afterthought.
+ */
+abstract class Migration
 {
-    protected PDO $pdo;
-    protected array $migrations = [];
+    protected Connection $connection;
 
-    public function __construct(PDO $pdo)
+    final public function setConnection(Connection $connection): void
     {
-        $this->pdo = $pdo;
-        $this->migrations = glob(database_path('migrations/*.php')); // Stub path
+        $this->connection = $connection;
     }
 
-    public function run(): void
+    abstract public function up(): void;
+
+    abstract public function down(): void;
+
+    /**
+     * Whether to wrap this migration in a transaction.
+     *
+     * MySQL cannot roll back DDL, so wrapping gains nothing there; PostgreSQL
+     * and SQLite can, and a half-applied migration is far worse than a failed
+     * one. Override to false for statements a transaction cannot contain.
+     */
+    public function withinTransaction(): bool
     {
-        // Sample migration: create_users_table
-        $this->createUsersTable();
-        // Run others from files
-        foreach ($this->migrations as $file) {
-            require $file;
-            // Assume file defines up() method
-        }
+        return true;
     }
 
-    protected function createUsersTable(): void
+    /**
+     * Run raw SQL.
+     *
+     * @param list<mixed> $bindings
+     */
+    protected function statement(string $sql, array $bindings = []): int
     {
-        $sql = "CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )";
-        $this->pdo->exec($sql);
-        // Insert samples
-        $this->pdo->exec("INSERT OR IGNORE INTO users (name, email) VALUES ('John Doe', 'john@example.com'), ('Jane Smith', 'jane@example.com')");
-        // For async: Use Swoole coroutine exec in ultra mode
+        return $this->connection->statement($sql, $bindings);
     }
 
-    public function rollback(): void
+    protected function schema(): Schema
     {
-        // Stub: Drop tables
-        $this->pdo->exec("DROP TABLE IF EXISTS users");
+        return new Schema($this->connection);
     }
 }

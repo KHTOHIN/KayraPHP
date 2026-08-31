@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{namespace}};
+
+/**
+ * Business logic for {{name}}.
+ *
+ * Register the lifetime in AppServiceProvider. Prefer scoped() when the service
+ * holds any per-request state.
+ */
+final class {{class}}
+{
+}

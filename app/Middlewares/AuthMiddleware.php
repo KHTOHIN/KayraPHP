@@ -1,20 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Middlewares;
 
 use Kayra\Http\Request;
 use Kayra\Http\Response;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 
-class AuthMiddleware implements MiddlewareInterface
+/**
+ * Example bearer-token gate.
+ *
+ * The parameter types are the PSR-15 ones, not the KayraPHP subclasses: PHP
+ * requires a parameter type to be the same as, or wider than, the interface's.
+ * Narrowing it to Kayra\Http\Request is a fatal error at class-declaration time.
+ */
+final class AuthMiddleware implements MiddlewareInterface
 {
-    public function process(Request $request, RequestHandlerInterface $handler): Response
+    public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        // Stub: Check auth header
-        if (!$request->hasHeader('Authorization')) {
-            return Response::create(401, [], 'Unauthorized');
+        $token = $request instanceof Request
+            ? $request->bearerToken()
+            : null;
+
+        if ($token === null) {
+            return Response::json(['message' => 'Unauthenticated.'], 401)
+                ->withHeader('WWW-Authenticate', 'Bearer');
         }
-        return $handler->handle($request);
+
+        // Replace with a real lookup; the resolved user travels as an attribute
+        // rather than in a property, so nothing leaks between requests.
+        return $handler->handle($request->withAttribute('auth.token', $token));
     }
 }

@@ -1,50 +1,20 @@
-# -------------------------
-# Dependencies
-# -------------------------
 /vendor/
+/node_modules/
 
-# -------------------------
-# Environment
-# -------------------------
 .env
+.env.*
+!.env.example
 
-# -------------------------
-# Logs
-# -------------------------
-storage/logs/*.log
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
 
-# -------------------------
-# Runtime / Cache / Sessions / Uploads
-# -------------------------
-storage/cache/*
-storage/sessions/*
-storage/uploads/*
+/storage/logs/*
+/storage/framework/views/*
+/storage/framework/phpunit/*
+!/storage/**/.gitignore
 
-# -------------------------
-# IDE / Editor
-# -------------------------
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
-
-# -------------------------
-# OS generated files
-# -------------------------
+.phpunit.result.cache
+/.idea/
+/.vscode/
 .DS_Store
 Thumbs.db
-
-# -------------------------
-# Composer / PHP related
-# -------------------------
-composer.lock
-phpunit.result.cache
-
-# -------------------------
-# Node / Frontend (optional)
-# -------------------------
-node_modules/
-npm-debug.log*
-yarn-error.log*
-dist/
-build/

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    PSR-7 conformance, run against the community integration suite.
+
+    Warnings are not fatal here, unlike the main configuration. That suite
+    deliberately discards the return values of with*() methods while testing
+    that they reject invalid arguments, which #[\NoDiscard] reports. The
+    discards are correct in that context; failing on them would mean giving up
+    either the attribute or the conformance suite.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory="storage/framework/phpunit-psr7"
+         failOnWarning="false"
+         failOnDeprecation="false">
+    <testsuites>
+        <testsuite name="PSR-7">
+            <directory>tests/Psr7</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

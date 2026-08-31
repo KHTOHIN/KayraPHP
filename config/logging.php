@@ -1,23 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 return [
-    'default' => env('LOG_CHANNEL', 'stack'),
-    'deprecations' => env('LOG_DEPRECATIONS_CHANNEL', 'null'),
-    'channels' => [
-        'stack' => [
-            'driver' => 'stack',
-            'channels' => ['single'],
-            'ignore_exceptions' => false,
-        ],
-        'single' => [
-            'driver' => 'single',
-            'path' => storage_path('logs/kayra.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-        ],
-        'async' => [
-            'driver' => 'async',
-            'queue' => storage_path('logs/queue.jsonl'),
-            'flush_interval' => 100,
-        ],
-    ],
+    /*
+    |----------------------------------------------------------------------
+    | Log channel
+    |----------------------------------------------------------------------
+    | 'daily'  rotating file in storage/logs
+    | 'single' one file in storage/logs
+    | 'stderr' standard error — the right choice inside a container
+    | 'stdout' standard output
+    */
+
+    'channel' => env('LOG_CHANNEL', 'daily'),
+
+    // emergency|alert|critical|error|warning|notice|info|debug
+    'level' => env('LOG_LEVEL', 'debug'),
+
+    // Days of rotated files to keep, for the 'daily' channel.
+    'days' => 14,
 ];

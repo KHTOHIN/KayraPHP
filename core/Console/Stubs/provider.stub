@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{namespace}};
+
+use Kayra\Foundation\ServiceProvider;
+
+final class {{class}} extends ServiceProvider
+{
+    /**
+     * Add bindings only. Nothing is guaranteed resolvable yet.
+     */
+    public function register(): void
+    {
+    }
+
+    /**
+     * Runs once every provider has registered.
+     */
+    public function boot(): void
+    {
+    }
+}

@@ -1,122 +1,105 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kayra\Console;
 
+use Kayra\Console\Commands\AboutCommand;
+use Kayra\Console\Commands\ClearCommand;
+use Kayra\Console\Commands\DoctorCommand;
+use Kayra\Console\Commands\KeyGenerateCommand;
+use Kayra\Console\Commands\MakeCommand;
+use Kayra\Console\Commands\MigrateCommand;
+use Kayra\Console\Commands\OptimizeCommand;
+use Kayra\Console\Commands\RouteListCommand;
+use Kayra\Console\Commands\ServeCommand;
+use Kayra\Console\Commands\TestCommand;
 use Kayra\Foundation\Application;
-use Kayra\Console\Commands\{
-    ListCommand,
-    KeyGenerateCommand,
-    CacheClearCommand,
-    RouteListCommand,
-    ServeCommand
-};
+use Symfony\Component\Console\Application as ConsoleApplication;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Output\ConsoleOutput;
+use Throwable;
 
-class Kernel
+/**
+ * The `kayra` command-line entry point.
+ *
+ * Commands are resolved through the container, so a command can type-hint any
+ * service exactly like a controller can.
+ */
+final class Kernel
 {
-    protected Application $app;
-    protected array $commands = [];
+    /** @var list<class-string<Command>> */
+    private const COMMANDS = [
+        ServeCommand::class,
+        RouteListCommand::class,
+        MakeCommand::class,
+        OptimizeCommand::class,
+        ClearCommand::class,
+        KeyGenerateCommand::class,
+        DoctorCommand::class,
+        AboutCommand::class,
+        MigrateCommand::class,
+        TestCommand::class,
+    ];
 
-    public function __construct(Application $app)
+    private readonly ConsoleApplication $console;
+
+    public function __construct(private readonly Application $app)
     {
-        $this->app = $app;
+        $this->console = new ConsoleApplication('KayraPHP', Application::VERSION);
 
-        $this->register([
-            'list'              => ListCommand::class,
-            'key:generate'      => KeyGenerateCommand::class,
-            'cache:clear'       => CacheClearCommand::class,
-            'route:list'        => RouteListCommand::class,
-            'serve'             => ServeCommand::class,
-            'make:controller'   => MakeControllerCommand::class,
-            'make:model'        => MakeModelCommand::class,
-            'migrate'           => MigrateCommand::class,
-            'container:compile' => ContainerCompileCommand::class,
-        ]);
-    }
+        foreach (self::COMMANDS as $command) {
+            $this->console->add($this->app->make($command));
+        }
 
-    /**
-     * Static method to compile the container during composer post-autoload-dump
-     */
-    public static function compileContainer(): void
-    {
-        $basePath = dirname(__DIR__, 3); // Go up 3 levels from core/Console/Kernel.php
-
-        // Load config files
-        $configs = [];
-        foreach (['app', 'cache', 'database', 'storage'] as $config) {
-            $configFile = "{$basePath}/config/{$config}.php";
-            if (file_exists($configFile)) {
-                $configs[$config] = require $configFile;
+        // Project-supplied commands, from config/app.php.
+        foreach ($this->app->config()->array('app.commands', []) as $command) {
+            if (is_string($command) && class_exists($command)) {
+                $this->console->add($this->app->make($command));
             }
         }
 
-        // Create container and compiler
-        $container = new \Kayra\Container\Container();
-        $compiler = new \Kayra\Container\Compiler($container);
-
-        // Compile basic services
-        $compiler->compileBasicServices($configs);
-
-        echo "Container compiled successfully.\n";
+        // routes/console.php may register closures as commands.
+        $this->loadConsoleRoutes();
     }
 
-    /**
-     * Register command mappings.
-     */
-    protected function register(array $commands): void
+    private function loadConsoleRoutes(): void
     {
-        $this->commands = $commands;
-    }
+        $file = $this->app->routesPath('console.php');
 
-    /**
-     * Handle CLI input.
-     */
-    public function handle(array $argv): void
-    {
-        $command = $argv[1] ?? 'list';
-        $args = array_slice($argv, 2);
+        if (is_file($file)) {
+            (function (string $path): void {
+                $console = $this->console;
+                $app = $this->app;
 
-        if (!isset($this->commands[$command])) {
-            $this->printError("Command '{$command}' not found.");
-            $this->runListCommand();
-            return;
+                require $path;
+            })($file);
         }
+    }
 
-        $class = $this->commands[$command];
-
-        if (!class_exists($class)) {
-            $this->printError("Command class not found: {$class}");
-            return;
-        }
-
-        if (!method_exists($class, 'run')) {
-            $this->printError("Invalid command: {$class} must implement static run(Application \$app, array \$args).");
-            return;
-        }
-
-        $class::run($this->app, $args);
+    public function console(): ConsoleApplication
+    {
+        return $this->console;
     }
 
     /**
-     * Print a styled error message.
+     * @param list<string>|null $argv
      */
-    protected function printError(string $message): void
+    public function handle(?array $argv = null): int
     {
-        echo "❌ {$message}\n\n";
-    }
+        $input = new ArgvInput($argv);
+        $output = new ConsoleOutput();
 
-    /**
-     * Fallback to the list command when invalid input.
-     */
-    protected function runListCommand(): void
-    {
-        if (isset($this->commands['list'])) {
-            $list = $this->commands['list'];
-            $list::run($this->app, []);
-        } else {
-            echo "Available commands:\n";
-            foreach (array_keys($this->commands) as $cmd) {
-                echo "  - {$cmd}\n";
+        try {
+            return $this->console->run($input, $output);
+        } catch (Throwable $e) {
+            $output->getErrorOutput()->writeln('<error>' . $e->getMessage() . '</error>');
+
+            if ($this->app->isDebug()) {
+                $output->getErrorOutput()->writeln($e->getTraceAsString());
             }
+
+            return 1;
         }
     }
 }

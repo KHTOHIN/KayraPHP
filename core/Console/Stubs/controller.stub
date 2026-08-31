@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{namespace}};
+
+use Kayra\Http\Controller;
+use Kayra\Http\Request;
+use Psr\Http\Message\ResponseInterface;
+
+final class {{class}} extends Controller
+{
+    public function index(Request $request): ResponseInterface
+    {
+        return $this->json(['message' => 'Hello from {{class}}']);
+    }
+}

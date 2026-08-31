@@ -1,20 +1,47 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
-use App\Models\User;
-
-class UserService
+/**
+ * Example service.
+ *
+ * Business logic lives here rather than in controllers, so it can be tested
+ * without an HTTP request and reused from the CLI or a queue worker.
+ */
+final class UserService
 {
-    public function getUsers(int $limit = 10): array
+    /** @var list<array{id: int, name: string, email: string}> */
+    private array $users = [
+        ['id' => 1, 'name' => 'Kawsar Hamid', 'email' => 'kawsar@example.com'],
+        ['id' => 2, 'name' => 'Ada Lovelace', 'email' => 'ada@example.com'],
+    ];
+
+    /**
+     * @return list<array{id: int, name: string, email: string}>
+     */
+    public function all(): array
     {
-        $user = new User();
-        return $user->all(); // Limit via QueryBuilder in model
+        return $this->users;
     }
 
-    public function createUser(string $name, string $email): int
+    /**
+     * @return array{id: int, name: string, email: string}|null
+     */
+    public function find(int $id): ?array
     {
-        $user = new User();
-        return $user->create(['name' => $name, 'email' => $email]);
+        foreach ($this->users as $user) {
+            if ($user['id'] === $id) {
+                return $user;
+            }
+        }
+
+        return null;
+    }
+
+    public function count(): int
+    {
+        return count($this->users);
     }
 }

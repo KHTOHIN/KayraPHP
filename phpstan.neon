@@ -1,0 +1,21 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 9
+
+    paths:
+        - core
+        - app
+        - tests
+
+    treatPhpDocTypesAsCertain: false
+    checkMissingCallableSignature: true
+
+    # phpstan-baseline.neon records annotation debt: missing type annotations and
+    # mixed-casts, not defects. Findings that indicated real problems were fixed
+    # rather than baselined.
+    #
+    # The baseline must only ever shrink. CI fails on any new error, so the
+    # ratchet turns one way. Regenerate deliberately, never as a reflex:
+    #   vendor/bin/phpstan analyse --generate-baseline=phpstan-baseline.neon

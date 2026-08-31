@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{namespace}};
+
+use Kayra\Console\Command;
+use Symfony\Component\Console\Attribute\AsCommand;
+
+#[AsCommand(name: '{{kebab}}', description: 'Description of {{name}}')]
+final class {{class}} extends Command
+{
+    protected function run_(): int
+    {
+        $this->io->success('{{class}} ran.');
+
+        return self::SUCCESS;
+    }
+}

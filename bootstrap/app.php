@@ -1,35 +1,31 @@
 <?php
 
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| Create the application
+|--------------------------------------------------------------------------
+|
+| This file builds the application and returns it. It is deliberately the only
+| place that knows the project root, so both the HTTP entry point and the CLI
+| can share exactly the same wiring.
+|
+| Nothing here is request-specific: on a long-running runtime this runs once
+| per worker, not once per request.
+|
+*/
+
+use Kayra\Container\Container;
 use Kayra\Foundation\Application;
 
-/*
-|--------------------------------------------------------------------------
-| Load Environment Variables
-|--------------------------------------------------------------------------
-*/
-$envFile = __DIR__ . '/../.env';
-if (file_exists($envFile)) {
-    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        if (str_starts_with($line, '#')) continue;
-        [$key, $value] = explode('=', $line, 2);
-        $_ENV[$key] = trim($value);
-        $_SERVER[$key] = trim($value);
-    }
-}
+$app = new Application(dirname(__DIR__));
 
-/*
-|--------------------------------------------------------------------------
-| Create Application
-|--------------------------------------------------------------------------
-*/
-$app = new Application(__DIR__ . '/..');
+// Make the container reachable from the global helper functions. Framework
+// internals never use this; it exists for app(), config(), route() and friends.
+Container::setInstance($app);
 
-/*
-|--------------------------------------------------------------------------
-| Bind Core Environment Settings
-|--------------------------------------------------------------------------
-*/
-$app->singleton('env', fn() => $_ENV['APP_ENV'] ?? 'production');
-$app->singleton('debug', fn() => ($_ENV['APP_DEBUG'] ?? 'false') === 'true');
+$app->bootstrap();
+$app->boot();
 
 return $app;

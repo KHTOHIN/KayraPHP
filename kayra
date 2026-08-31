@@ -1,3 +1,11 @@
 #!/usr/bin/env php
 <?php
+
+declare(strict_types=1);
+
+/*
+ * Convenience entry point so the documented command is `php kayra ...`.
+ * The implementation lives in bin/kayra.
+ */
+
 require __DIR__ . '/bin/kayra';

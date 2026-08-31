@@ -1,7 +1,22 @@
 <?php
 
-// Stub for CLI routes (e.g., artisan-style)
-return [
-    'migrate' => 'Kayra\\Database\\Migration@run',
-    'seed' => 'Kayra\\Database\\Seeder@run',
-];
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| Console routes
+|--------------------------------------------------------------------------
+|
+| Register one-off commands here. $console is the Symfony console application
+| and $app is the KayraPHP application.
+|
+| Example:
+|
+|   $console->register('greet')
+|       ->setDescription('Say hello')
+|       ->setCode(function ($input, $output) use ($app) {
+|           $output->writeln('Hello from ' . $app->config()->string('app.name'));
+|           return 0;
+|       });
+|
+*/
