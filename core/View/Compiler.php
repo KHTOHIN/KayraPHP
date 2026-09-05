@@ -224,6 +224,13 @@ final class Compiler
             'includeIf'   => "<?php echo \$__env->includeIf({$expression}, get_defined_vars()); ?>",
             'includeWhen' => "<?php echo \$__env->includeWhen({$expression}, get_defined_vars()); ?>",
 
+            // Authorization
+            'can'       => '<?php if ($__env->can(' . $expression . ')): ?>',
+            'elsecan'   => '<?php elseif ($__env->can(' . $expression . ')): ?>',
+            'cannot'    => '<?php if (! $__env->can(' . $expression . ')): ?>',
+            'endcan'    => '<?php endif; ?>',
+            'endcannot' => '<?php endif; ?>',
+
             // Helpers
             'csrf'     => '<?php echo $__env->csrfField(); ?>',
             'method'   => "<?php echo \$__env->methodField({$expression}); ?>",

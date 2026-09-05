@@ -1,8 +1,6 @@
 #!/usr/bin/env php
 <?php
 
-declare(strict_types=1);
-
 /*
 |--------------------------------------------------------------------------
 | KayraPHP — CLI entry point
@@ -11,9 +9,11 @@ declare(strict_types=1);
 | The project root also has a `kayra` file that simply includes this one, so
 | the documented command is `php kayra ...` from the project directory.
 |
+| declare(strict_types=1) is deliberately absent from this file: it must parse
+| on whatever PHP the user happens to have on their PATH so that preflight.php
+| can explain the problem, rather than failing before it gets the chance.
+|
 */
-
-use Kayra\Console\Kernel;
 
 if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
     fwrite(STDERR, "The kayra console must be run from the command line.\n");
@@ -22,14 +22,12 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 
 $root = dirname(__DIR__);
 
-if (!is_file($root . '/vendor/autoload.php')) {
-    fwrite(STDERR, "Dependencies are not installed. Run: composer install\n");
-    exit(1);
-}
+// Checks the PHP version, extensions and vendor/ before anything else loads.
+require $root . '/bootstrap/preflight.php';
 
 require $root . '/vendor/autoload.php';
 
 /** @var Kayra\Foundation\Application $app */
 $app = require $root . '/bootstrap/app.php';
 
-exit((new Kernel($app))->handle($argv));
+exit((new Kayra\Console\Kernel($app))->handle($argv));

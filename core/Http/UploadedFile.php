@@ -216,7 +216,9 @@ final class UploadedFile implements UploadedFileInterface
     private function assertUsable(): void
     {
         if ($this->error !== UPLOAD_ERR_OK) {
-            throw new RuntimeException('Cannot use upload: ' . self::UPLOAD_ERRORS[$this->error]);
+            throw new RuntimeException(
+                'Cannot use upload: ' . (self::UPLOAD_ERRORS[$this->error] ?? 'Unknown upload error.'),
+            );
         }
 
         if ($this->moved) {

@@ -43,6 +43,11 @@ final class Request implements ServerRequestInterface
     /** @var array<string, mixed>|object|null */
     private array|object|null $parsedBody = null;
 
+    /** @var array<string, mixed>|null Lazily parsed form body; see post(). */
+    private ?array $decodedForm = null;
+
+    private bool $formDecoded = false;
+
     /** @var array<string, mixed> */
     private array $attributes = [];
 
@@ -63,8 +68,12 @@ final class Request implements ServerRequestInterface
         $clone = $this->traitWithBody($body);
 
         if ($clone !== $this) {
+            // Both memos are of the *old* body. Leaving either in place is how
+            // a request reports the contents of a stream it no longer has.
             $clone->jsonDecoded = false;
             $clone->decodedJson = null;
+            $clone->formDecoded = false;
+            $clone->decodedForm = null;
         }
 
         return $clone;
@@ -89,6 +98,25 @@ final class Request implements ServerRequestInterface
         $this->stream = $body;
 
         $this->setHeaders($headers);
+
+        // Seed the query parameters from the URI.
+        //
+        // PSR-7 permits but does not require this, and the reference
+        // implementations skip it -- which is why a hand-built request, or one
+        // from a runtime that does not think to call withQueryParams(), reads
+        // its own query string as empty. fromGlobals() and the Swoole adapter
+        // both call withQueryParams() afterwards and overwrite this, so the
+        // SAPI remains the authority wherever there is one.
+        $query = $this->uri->getQuery();
+
+        if ($query !== '') {
+            $parsed = [];
+            parse_str($query, $parsed);
+
+            foreach ($parsed as $name => $value) {
+                $this->queryParams[(string) $name] = $value;
+            }
+        }
 
         // PSR-7: a request must carry a Host header derived from the URI.
         if (!$this->hasHeader('Host') && $this->uri->getHost() !== '') {
@@ -136,7 +164,8 @@ final class Request implements ServerRequestInterface
         /** @var array<string, string> $headers */
         $headers = (array) ($swoole->header ?? []);
 
-        $host = $headers['host'] ?? ($server['SERVER_NAME'] ?? 'localhost');
+        $host = $headers['host'] ?? ($server['SERVER_NAME'] ?? null);
+        $host = is_string($host) && $host !== '' ? $host : 'localhost';
         $scheme = ($server['HTTPS'] ?? '') === 'on' ? 'https' : 'http';
         $target = is_string($server['REQUEST_URI'] ?? null) ? $server['REQUEST_URI'] : '/';
 
@@ -507,7 +536,16 @@ final class Request implements ServerRequestInterface
      */
     public function post(?string $key = null, mixed $default = null): mixed
     {
-        $body = $this->isJson() ? $this->json() : $this->parsedBody;
+        $body = match (true) {
+            $this->isJson()             => $this->json(),
+            $this->parsedBody !== null  => $this->parsedBody,
+            // Nothing populated the parsed body. Under php-fpm that means the
+            // SAPI did not fill $_POST -- which it only does for POST, so a
+            // PUT or PATCH carrying a form body would otherwise read as empty.
+            // It is also the case for any request built by hand, which is how
+            // most tests and every non-SAPI runtime construct one.
+            default                     => $this->form(),
+        };
 
         if (is_object($body)) {
             $body = get_object_vars($body);
@@ -518,6 +556,66 @@ final class Request implements ServerRequestInterface
         }
 
         return $key === null ? $body : ($body[$key] ?? $default);
+    }
+
+    /**
+     * Parse the raw body as an HTML form, once.
+     *
+     * Only for the two content types a form can actually be sent as. Anything
+     * else -- a JSON body handled above, a file upload the SAPI already
+     * decoded, an opaque payload -- is left alone: parse_str() would happily
+     * turn arbitrary bytes into a nonsense array rather than reporting that it
+     * could not read them.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function form(): ?array
+    {
+        if ($this->formDecoded) {
+            return $this->decodedForm;
+        }
+
+        $this->formDecoded = true;
+
+        $type = strtolower($this->getHeaderLine('Content-Type'));
+
+        if (!str_contains($type, 'application/x-www-form-urlencoded')) {
+            return $this->decodedForm = null;
+        }
+
+        $body = $this->getBody();
+
+        if ($body->isSeekable()) {
+            $body->rewind();
+        }
+
+        $contents = $body->getContents();
+
+        if ($body->isSeekable()) {
+            $body->rewind();
+        }
+
+        if ($contents === '') {
+            return $this->decodedForm = null;
+        }
+
+        $parsed = [];
+        parse_str($contents, $parsed);
+
+        if ($parsed === []) {
+            return $this->decodedForm = null;
+        }
+
+        // parse_str() yields integer keys for names like "0" or "a[]"; the
+        // body accessors promise string keys, so make that true here rather
+        // than loosening every signature downstream.
+        $normalised = [];
+
+        foreach ($parsed as $name => $value) {
+            $normalised[(string) $name] = $value;
+        }
+
+        return $this->decodedForm = $normalised;
     }
 
     /**

@@ -37,7 +37,11 @@ final class ContainerCompiler
     /** Pass null. */
     public const KIND_NULL = 'n';
 
-    /** @var array<class-string, list<array<string, mixed>>|false> */
+    /**
+     * A construction plan per class, or false for one that must stay dynamic.
+     *
+     * @var array<class-string, list<array{k: 's', i: class-string}|array{k: 'v', v: mixed}|array{k: 'n'}>|false>
+     */
     private array $plans = [];
 
     /** @var list<string> */
@@ -51,13 +55,14 @@ final class ContainerCompiler
      * Build a construction plan reachable from the given root classes.
      *
      * @param list<string> $roots Classes the application is known to resolve.
-     * @return array<class-string, list<array<string, mixed>>>
+     * @return array<class-string, list<array{k: 's', i: class-string}|array{k: 'v', v: mixed}|array{k: 'n'}>>
      */
     public function compile(array $roots): array
     {
         $this->plans = [];
         $this->skipped = [];
 
+        /** @var list<class-string> $queue */
         $queue = array_values(array_unique(array_filter($roots, class_exists(...))));
 
         // Breadth-first over the dependency graph. Every service a root needs is
@@ -83,7 +88,7 @@ final class ContainerCompiler
             }
         }
 
-        /** @var array<class-string, list<array<string, mixed>>> $compiled */
+        /** @var array<class-string, list<array{k: 's', i: class-string}|array{k: 'v', v: mixed}|array{k: 'n'}>> $compiled */
         $compiled = array_filter($this->plans, static fn (array|false $p): bool => $p !== false);
 
         // Deterministic order keeps the generated file diff-friendly.
@@ -105,10 +110,16 @@ final class ContainerCompiler
     /**
      * Plan one class, or false when it must stay dynamic.
      *
-     * @return list<array<string, mixed>>|false
+     * @param class-string $class
+     *
+     * @return list<array{k: 's', i: class-string}|array{k: 'v', v: mixed}|array{k: 'n'}>|false
      */
     private function plan(string $class): array|false
     {
+        if (!class_exists($class)) {
+            return $this->skip($class, 'no such class');
+        }
+
         try {
             $reflector = new ReflectionClass($class);
         } catch (Throwable) {
@@ -148,7 +159,7 @@ final class ContainerCompiler
     }
 
     /**
-     * @return array<string, mixed>|null Null when the parameter must stay dynamic.
+     * @return (array{k: 's', i: class-string}|array{k: 'v', v: mixed}|array{k: 'n'})|null Null when the parameter must stay dynamic.
      */
     private function planParameter(ReflectionParameter $parameter): ?array
     {
@@ -200,7 +211,7 @@ final class ContainerCompiler
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return (array{k: 'v', v: mixed}|array{k: 'n'})|null
      */
     private function planDefault(ReflectionParameter $parameter): ?array
     {

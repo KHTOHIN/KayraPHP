@@ -33,6 +33,12 @@ final class NeedsMailer
     }
 }
 
+/** A class the container can build without calling anything. */
+final class NoConstructor
+{
+    public string $value = 'default';
+}
+
 final class Expensive
 {
     public static int $constructed = 0;
@@ -145,6 +151,19 @@ final class ContainerTest extends TestCase
 
         $this->assertSame('built', $instance->value);
         $this->assertSame(1, Expensive::$constructed);
+    }
+
+    #[Test]
+    public function a_lazy_binding_works_for_a_class_with_no_constructor(): void
+    {
+        // The ghost's initialiser used to call __construct() unconditionally,
+        // so a constructor-less class fatalled the moment it was touched --
+        // after resolving cleanly, which made it look like a usage error.
+        $this->container->singleton(NoConstructor::class, null, lazy: true);
+
+        $instance = $this->container->get(NoConstructor::class);
+
+        $this->assertSame('default', $instance->value);
     }
 
     #[Test]

@@ -48,7 +48,7 @@ final class ActionDispatcher implements RequestHandlerInterface
         return $this->toResponse(match (true) {
             $handler instanceof ViewRoute     => $this->renderView($handler),
             $handler instanceof RedirectRoute => Response::redirect($handler->to, $handler->status),
-            default                           => $this->invoke($handler),
+            default                           => $this->invoke($handler, $this->parameters($request)),
         });
     }
 
@@ -57,12 +57,35 @@ final class ActionDispatcher implements RequestHandlerInterface
         return Response::html($this->app->get(ViewFactory::class)->render($route->view, $route->data));
     }
 
-    private function invoke(mixed $handler): mixed
+    /**
+     * Route parameters as the action should receive them.
+     *
+     * The matched route carries the raw strings from the URL. Where
+     * {@see \Kayra\Routing\SubstituteBindings} has since turned one into a
+     * model, the model is what the action asked for.
+     *
+     * @return array<string, mixed>
+     */
+    private function parameters(ServerRequestInterface $request): array
     {
-        // Route parameters are offered as named overrides; the container fills
-        // the rest of the signature by type.
         $parameters = $this->matched->parameters;
 
+        foreach (array_keys($parameters) as $name) {
+            $bound = $request->getAttribute('route.model.' . $name);
+
+            if ($bound !== null) {
+                $parameters[$name] = $bound;
+            }
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    private function invoke(mixed $handler, array $parameters): mixed
+    {
         if ($handler instanceof Closure) {
             return $this->app->call($handler, $parameters);
         }

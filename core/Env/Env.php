@@ -91,9 +91,7 @@ final class Env
 
         if (is_array($environment)) {
             foreach ($environment as $key => $value) {
-                if (is_string($key) && is_string($value)) {
-                    self::$variables[$key] = $value;
-                }
+                self::$variables[(string) $key] = $value;
             }
         }
 

@@ -200,6 +200,52 @@ if (!function_exists('logger')) {
     }
 }
 
+if (!function_exists('cache')) {
+    /**
+     * The cache, or a value from it.
+     *
+     *     cache()                    the default store
+     *     cache('key')               a value, or null
+     *     cache('key', 'fallback')   a value, or the fallback
+     *
+     * Named stores come from cache_store('name'); overloading this to write as
+     * well as read is what makes cache('key', $value) ambiguous in every
+     * framework that tries it.
+     */
+    function cache(?string $key = null, mixed $default = null): mixed
+    {
+        $repository = app(Kayra\Cache\Repository::class);
+
+        return $key === null ? $repository : $repository->get($key, $default);
+    }
+}
+
+if (!function_exists('cache_store')) {
+    /**
+     * A cache store by name, from config/cache.php.
+     */
+    function cache_store(?string $name = null): Kayra\Cache\Repository
+    {
+        return app(Kayra\Cache\CacheManager::class)->store($name);
+    }
+}
+
+if (!function_exists('event')) {
+    /**
+     * Dispatch an event and get it back.
+     *
+     * @template T of object
+     *
+     * @param T $event
+     *
+     * @return T
+     */
+    function event(object $event): object
+    {
+        return app(Kayra\Events\Dispatcher::class)->dispatch($event);
+    }
+}
+
 if (!function_exists('abort')) {
     /**
      * Abort the request with an HTTP status.

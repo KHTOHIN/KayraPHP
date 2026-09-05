@@ -32,7 +32,7 @@ final class SecurityHeaders implements MiddlewareInterface
         $nonce = base64_encode(random_bytes(16));
         $request = $request->withAttribute('csp_nonce', $nonce);
 
-        $this->views?->share('csp_nonce', $nonce);
+        $this->views?->shareForRequest('csp_nonce', $nonce);
 
         $response = $handler->handle($request);
 

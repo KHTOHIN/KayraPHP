@@ -1,16 +1,58 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 7
+			path: core/Auth/AuthManager.php
+
+		-
+			message: '#^Parameter \#1 \$model of class Kayra\\Auth\\ModelUserProvider constructor expects class\-string\<TUser of Kayra\\Auth\\Authenticatable&Kayra\\Database\\Model\>, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: core/Auth/AuthManager.php
+
+		-
+			message: '#^Parameter \#3 \$tokenModel of class Kayra\\Auth\\TokenGuard constructor expects class\-string\<Kayra\\Database\\Model\>, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: core/Auth/AuthManager.php
+
+		-
+			message: '#^Cannot cast mixed to int\.$#'
+			identifier: cast.int
+			count: 4
+			path: core/Auth/Hasher.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Auth/Hasher.php
+
+		-
+			message: '#^Method Kayra\\Auth\\ModelUserProvider\:\:rehashPasswordIfRequired\(\) has parameter \$credentials with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: core/Auth/ModelUserProvider.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 2
+			path: core/Auth/PasswordBroker.php
+
+		-
+			message: '#^Method Kayra\\Auth\\UserProvider\:\:rehashPasswordIfRequired\(\) has parameter \$credentials with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: core/Auth/UserProvider.php
+
+		-
 			message: '#^Method Kayra\\Config\\Repository\:\:array\(\) has parameter \$default with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: core/Config/Repository.php
-
-		-
-			message: '#^Call to function method_exists\(\) with ''ReflectionClass'' and ''newLazyGhost'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 2
-			path: core/Console/Commands/DoctorCommand.php
 
 		-
 			message: '#^Cannot cast mixed to string\.$#'
@@ -31,15 +73,9 @@ parameters:
 			path: core/Console/Commands/MakeCommand.php
 
 		-
-			message: '#^Binary operation "\." between non\-falsy\-string and mixed results in an error\.$#'
-			identifier: binaryOp.invalid
-			count: 1
-			path: core/Console/Commands/RouteListCommand.php
-
-		-
 			message: '#^Cannot cast mixed to string\.$#'
 			identifier: cast.string
-			count: 1
+			count: 2
 			path: core/Console/Commands/RouteListCommand.php
 
 		-
@@ -55,26 +91,14 @@ parameters:
 			path: core/Console/Commands/ServeCommand.php
 
 		-
-			message: '#^Part \$this\-\>option\(''port''\) \(mixed\) of encapsed string cannot be cast to string\.$#'
-			identifier: encapsedStringPart.nonString
-			count: 1
-			path: core/Console/Commands/ServeCommand.php
-
-		-
 			message: '#^Parameter \#1 \$command of method Symfony\\Component\\Console\\Application\:\:add\(\) expects Symfony\\Component\\Console\\Command\\Command, object given\.$#'
 			identifier: argument.type
 			count: 1
 			path: core/Console/Kernel.php
 
 		-
-			message: '#^Call to an undefined method object\:\:__construct\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: core/Container/Container.php
-
-		-
-			message: '#^Creating callable from \(callable\(\)\: mixed\)\|string but it might not be a callable\.$#'
-			identifier: callable.nonCallable
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
 			count: 1
 			path: core/Container/Container.php
 
@@ -121,12 +145,6 @@ parameters:
 			path: core/Container/Container.php
 
 		-
-			message: '#^Method Kayra\\Container\\Container\:\:reflectCallable\(\) should return array\{callable\(\)\: mixed, ReflectionFunctionAbstract, string\|null\} but returns array\{\(callable\(\)\: mixed\)\|string, ReflectionFunction, null\}\.$#'
-			identifier: return.type
-			count: 1
-			path: core/Container/Container.php
-
-		-
 			message: '#^Method Kayra\\Container\\Container\:\:resolveContextual\(\) has parameter \$give with no signature specified for Closure\.$#'
 			identifier: missingType.callable
 			count: 1
@@ -158,12 +176,6 @@ parameters:
 
 		-
 			message: '#^Parameter \#1 \$objectOrClass of class ReflectionClass constructor expects class\-string\<T of object\>\|T of object, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: core/Container/Container.php
-
-		-
-			message: '#^Parameter \#1 \$parameters of method Kayra\\Container\\Container\:\:resolveArguments\(\) expects list\<ReflectionParameter\>, list\<ReflectionParameter\>\|null given\.$#'
 			identifier: argument.type
 			count: 1
 			path: core/Container/Container.php
@@ -217,12 +229,6 @@ parameters:
 			path: core/Container/Definition.php
 
 		-
-			message: '#^Property Kayra\\Database\\Blueprint\:\:\$columns \(list\<string\>\) does not accept non\-empty\-array\<int\<0, max\>, string\>\.$#'
-			identifier: assign.propertyType
-			count: 2
-			path: core/Database/Blueprint.php
-
-		-
 			message: '#^Cannot cast mixed to string\.$#'
 			identifier: cast.string
 			count: 4
@@ -251,6 +257,102 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: core/Database/Migrator.php
+
+		-
+			message: '#^Cannot cast mixed to float\.$#'
+			identifier: cast.double
+			count: 1
+			path: core/Database/Model.php
+
+		-
+			message: '#^Cannot cast mixed to int\.$#'
+			identifier: cast.int
+			count: 1
+			path: core/Database/Model.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Database/Model.php
+
+		-
+			message: '#^Method Kayra\\Database\\Model\:\:find\(\) should return static\(Kayra\\Database\\Model\)\|null but returns Kayra\\Database\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: core/Database/Model.php
+
+		-
+			message: '#^Method Kayra\\Database\\Model\:\:where\(\) has parameter \$column with no signature specified for Closure\.$#'
+			identifier: missingType.callable
+			count: 1
+			path: core/Database/Model.php
+
+		-
+			message: '#^Class Kayra\\Database\\ModelQuery has PHPDoc tag @method for method whereIn\(\) parameter \#2 \$values with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Class Kayra\\Database\\ModelQuery has PHPDoc tag @method for method whereNotIn\(\) parameter \#2 \$values with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Method Kayra\\Database\\ModelQuery\:\:__call\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Method Kayra\\Database\\ModelQuery\:\:orWhere\(\) has parameter \$column with no signature specified for Closure\.$#'
+			identifier: missingType.callable
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Method Kayra\\Database\\ModelQuery\:\:orWhere\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Method Kayra\\Database\\ModelQuery\:\:where\(\) has parameter \$column with no signature specified for Closure\.$#'
+			identifier: missingType.callable
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Method Kayra\\Database\\ModelQuery\:\:where\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Method Kayra\\Database\\ModelQuery\:\:with\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Parameter \#1 \$name of method Kayra\\Database\\Model\:\:hasRelationMethod\(\) expects string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Parameter \#1 \$name of method Kayra\\Database\\Model\:\:resolveRelation\(\) expects string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: core/Database/ModelQuery.php
+
+		-
+			message: '#^Parameter \#3 \$relation of method Kayra\\Database\\Relations\\Relation\:\:match\(\) expects string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: core/Database/ModelQuery.php
 
 		-
 			message: '#^Cannot cast mixed to float\.$#'
@@ -291,14 +393,62 @@ parameters:
 		-
 			message: '#^Cannot cast mixed to string\.$#'
 			identifier: cast.string
-			count: 1
-			path: core/Encryption/Encrypter.php
+			count: 2
+			path: core/Database/Relations/BelongsTo.php
 
 		-
-			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 2
-			path: core/Env/Env.php
+			message: '#^Method Kayra\\Database\\Relations\\BelongsTo\:\:query\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/Relations/BelongsTo.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Database/Relations/BelongsToMany.php
+
+		-
+			message: '#^Method Kayra\\Database\\Relations\\BelongsToMany\:\:query\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/Relations/BelongsToMany.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Database/Relations/HasMany.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Database/Relations/HasOne.php
+
+		-
+			message: '#^Method Kayra\\Database\\Relations\\HasOneOrMany\:\:query\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/Relations/HasOneOrMany.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Database/Relations/Relation.php
+
+		-
+			message: '#^Method Kayra\\Database\\Relations\\Relation\:\:query\(\) return type with generic class Kayra\\Database\\ModelQuery does not specify its types\: TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: core/Database/Relations/Relation.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: core/Encryption/Encrypter.php
 
 		-
 			message: '#^Cannot cast mixed to string\.$#'
@@ -325,10 +475,16 @@ parameters:
 			path: core/Foundation/PackageManifest.php
 
 		-
-			message: '#^Method Kayra\\Foundation\\PackageManifest\:\:rebuild\(\) should return array\<string, array\{providers\: list\<string\>, aliases\: array\<string, string\>\}\> but returns array\<string, array\{providers\: list\<string\>, aliases\: array\<string, string\>\}\>\|null\.$#'
-			identifier: return.type
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 2
+			path: core/Foundation/Providers/AuthServiceProvider.php
+
+		-
+			message: '#^Parameter \#1 \$model of class Kayra\\Auth\\ModelUserProvider constructor expects class\-string\<TUser of Kayra\\Auth\\Authenticatable&Kayra\\Database\\Model\>, string given\.$#'
+			identifier: argument.type
 			count: 1
-			path: core/Foundation/PackageManifest.php
+			path: core/Foundation/Providers/AuthServiceProvider.php
 
 		-
 			message: '#^Parameter \#1 \$name of static method Monolog\\Level\:\:fromName\(\) expects ''ALERT''\|''Alert''\|''alert''\|''CRITICAL''\|''Critical''\|''critical''\|''DEBUG''\|''Debug''\|''debug''\|''EMERGENCY''\|''Emergency''\|''emergency''\|''ERROR''\|''Error''\|''error''\|''INFO''\|''Info''\|''info''\|''NOTICE''\|''Notice''\|''notice''\|''WARNING''\|''Warning''\|''warning'', string given\.$#'
@@ -385,12 +541,6 @@ parameters:
 			path: core/Http/Middleware/TrustProxies.php
 
 		-
-			message: '#^Binary operation "\." between ''http\://''\|''https\://'' and mixed results in an error\.$#'
-			identifier: binaryOp.invalid
-			count: 1
-			path: core/Http/Request.php
-
-		-
 			message: '#^Cannot cast mixed to int\.$#'
 			identifier: cast.int
 			count: 2
@@ -430,12 +580,6 @@ parameters:
 			message: '#^Cannot cast mixed to int\.$#'
 			identifier: cast.int
 			count: 2
-			path: core/Http/UploadedFile.php
-
-		-
-			message: '#^Offset int\<min, \-1\>\|int\<1, max\> might not exist on array\{0\: ''No error\.'', 1\: ''The file exceeds…'', 2\: ''The file exceeds…'', 3\: ''The file was only…'', 4\: ''No file was…'', 6\: ''Missing a temporary…'', 7\: ''Failed to write…'', 8\: ''A PHP extension…''\}\.$#'
-			identifier: offsetAccess.notFound
-			count: 1
 			path: core/Http/UploadedFile.php
 
 		-
@@ -499,40 +643,10 @@ parameters:
 			path: core/Routing/Router.php
 
 		-
-			message: '#^Call to an undefined method object\:\:end\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: core/Runtime/SwooleRuntime.php
-
-		-
-			message: '#^Call to an undefined method object\:\:header\(\)\.$#'
-			identifier: method.notFound
+			message: '#^Method Kayra\\Runtime\\Swoole\\SwooleHttpServer\:\:on\(\) has parameter \$callback with no signature specified for callable\.$#'
+			identifier: missingType.callable
 			count: 1
-			path: core/Runtime/SwooleRuntime.php
-
-		-
-			message: '#^Call to an undefined method object\:\:on\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: core/Runtime/SwooleRuntime.php
-
-		-
-			message: '#^Call to an undefined method object\:\:set\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: core/Runtime/SwooleRuntime.php
-
-		-
-			message: '#^Call to an undefined method object\:\:start\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: core/Runtime/SwooleRuntime.php
-
-		-
-			message: '#^Call to an undefined method object\:\:status\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: core/Runtime/SwooleRuntime.php
+			path: core/Runtime/Swoole/SwooleContracts.php
 
 		-
 			message: '#^Parameter \#1 \$length of function random_bytes expects int\<1, max\>, int given\.$#'
@@ -547,46 +661,10 @@ parameters:
 			path: core/View/Compiler.php
 
 		-
-			message: '#^Method Kayra\\View\\Factory\:\:include\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
+			message: '#^Call to an undefined method Kayra\\Auth\\Authenticatable\:\:getAttributes\(\)\.$#'
+			identifier: method.notFound
 			count: 1
-			path: core/View/Factory.php
-
-		-
-			message: '#^Method Kayra\\View\\Factory\:\:include\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: core/View/Factory.php
-
-		-
-			message: '#^Method Kayra\\View\\Factory\:\:includeIf\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: core/View/Factory.php
-
-		-
-			message: '#^Method Kayra\\View\\Factory\:\:includeIf\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: core/View/Factory.php
-
-		-
-			message: '#^Method Kayra\\View\\Factory\:\:includeWhen\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: core/View/Factory.php
-
-		-
-			message: '#^Method Kayra\\View\\Factory\:\:includeWhen\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: core/View/Factory.php
-
-		-
-			message: '#^PHPDoc tag @param references unknown parameter\: \$__data$#'
-			identifier: parameter.notFound
-			count: 3
-			path: core/View/Factory.php
+			path: tests/Feature/AuthenticationTest.php
 
 		-
 			message: '#^Cannot access offset ''name'' on mixed\.$#'
@@ -697,6 +775,36 @@ parameters:
 			path: tests/TestCase.php
 
 		-
+			message: '#^Call to an undefined method Kayra\\Auth\\Authenticatable\:\:getAttributes\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Unit/AuthTest.php
+
+		-
+			message: '#^Cannot call method getAuthPassword\(\) on Kayra\\Database\\Model\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Unit/AuthTest.php
+
+		-
+			message: '#^Cannot call method getAuthPassword\(\) on Kayra\\Tests\\Unit\\AuthUser\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Unit/AuthTest.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 2
+			path: tests/Unit/AuthTest.php
+
+		-
+			message: '#^Property Kayra\\Tests\\Unit\\AuthTest\:\:\$provider with generic class Kayra\\Auth\\ModelUserProvider does not specify its types\: TUser$#'
+			identifier: missingType.generics
+			count: 1
+			path: tests/Unit/AuthTest.php
+
+		-
 			message: '#^Parameter \#1 \$roots of method Kayra\\Container\\ContainerCompiler\:\:compile\(\) expects list\<string\>, array\<int\<0, max\>\|string, string\> given\.$#'
 			identifier: argument.type
 			count: 1
@@ -731,6 +839,96 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: tests/Unit/HttpMessageTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsString\(\) with string will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot access offset ''title'' on mixed\.$#'
+			identifier: offsetAccess.nonOffsetAccessible
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot access offset 0 on mixed\.$#'
+			identifier: offsetAccess.nonOffsetAccessible
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot access property \$bio on Kayra\\Tests\\Unit\\TestProfile\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot access property \$name on Kayra\\Tests\\Unit\\TestUser\|null\.$#'
+			identifier: property.nonObject
+			count: 2
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot call method forceDelete\(\) on Kayra\\Tests\\Unit\\TestNote\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot call method toArray\(\) on Kayra\\Tests\\Unit\\TestUser\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Cannot cast mixed to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Expression "\$post\-\>author" on a separate line does not do anything\.$#'
+			identifier: expr.resultUnused
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Expression "\$user\-\>posts" on a separate line does not do anything\.$#'
+			identifier: expr.resultUnused
+			count: 2
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Method Kayra\\Tests\\Unit\\TestNote\:\:onlyTrashed\(\) should return Kayra\\Database\\ModelQuery\<Kayra\\Tests\\Unit\\TestNote\> but returns Kayra\\Database\\ModelQuery\<static\(Kayra\\Tests\\Unit\\TestNote\)\>\.$#'
+			identifier: return.type
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Method Kayra\\Tests\\Unit\\TestNote\:\:query\(\) should return Kayra\\Database\\ModelQuery\<Kayra\\Tests\\Unit\\TestNote\> but returns Kayra\\Database\\ModelQuery\<static\(Kayra\\Tests\\Unit\\TestNote\)\>\.$#'
+			identifier: return.type
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Method Kayra\\Tests\\Unit\\TestNote\:\:withTrashed\(\) should return Kayra\\Database\\ModelQuery\<Kayra\\Tests\\Unit\\TestNote\> but returns Kayra\\Database\\ModelQuery\<static\(Kayra\\Tests\\Unit\\TestNote\)\>\.$#'
+			identifier: return.type
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Parameter \#1 \$callback of function array_map expects \(callable\(Kayra\\Database\\Model\)\: mixed\)\|null, Closure\(Kayra\\Tests\\Unit\\TestUser\)\: string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/ModelTest.php
+
+		-
+			message: '#^Parameter \#2 \$haystack of method PHPUnit\\Framework\\Assert\:\:assertStringNotContainsString\(\) expects string, string\|false given\.$#'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/ModelTest.php
 
 		-
 			message: '#^Method Kayra\\Tests\\Unit\\RegressionTest\:\:the_host_header_is_checked_against_the_allow_list\(\) has parameter \$allowed with no value type specified in iterable type array\.$#'

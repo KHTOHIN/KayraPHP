@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Kayra\View;
 
+use Closure;
+use Kayra\Auth\Access\Gate;
+use Kayra\Container\ExecutionContext;
+use ParseError;
 use RuntimeException;
 use Throwable;
 
@@ -22,22 +26,25 @@ final class Factory
     /** Marker left behind by @parent, replaced when the section is finalised. */
     private const PARENT_PLACEHOLDER = '@__kayra_parent__@';
 
-    /** @var array<string, string> Section name => rendered content. */
-    private array $sections = [];
+    /**
+     * Per-request rendering state, keyed by execution context.
+     *
+     * The factory is a singleton, so this cannot be a set of plain properties:
+     * see {@see RenderState} for what goes wrong when it is.
+     *
+     * @var array<string, RenderState>
+     */
+    private array $states = [];
 
-    /** @var list<string> Names of sections currently being captured. */
-    private array $sectionStack = [];
-
-    /** @var list<LoopState> */
-    private array $loopStack = [];
-
-    /** Parent template recorded by @extends, per nesting depth. */
-    private ?string $parent = null;
-
-    private int $depth = 0;
-
-    /** @var array<string, mixed> Data shared with every view. */
-    private array $shared = [];
+    /**
+     * Values shared with every view in every request.
+     *
+     * Set at boot by service providers. Per-request values -- a CSRF token, a
+     * CSP nonce -- belong in {@see shareForRequest()} instead.
+     *
+     * @var array<string, mixed>
+     */
+    private array $globals = [];
 
     /** @var array<string, string> Memoised view-name => path lookups. */
     private array $resolved = [];
@@ -53,6 +60,14 @@ final class Factory
      * @var array<string, string>
      */
     private array $compiledPaths = [];
+
+    /**
+     * @var (Closure(): Gate)|null Deferred so most renders never build one.
+     *
+     * The resolver itself is set once at boot and is safe to share; the Gate it
+     * produces is per-request and lives on the {@see RenderState}.
+     */
+    private ?Closure $gateResolver = null;
 
     /**
      * @param list<string> $paths Directories searched for templates, in order.
@@ -74,11 +89,46 @@ final class Factory
     }
 
     /**
-     * Share a variable with every view rendered by this factory.
+     * Share a variable with every view, in every request.
+     *
+     * For values that belong to one request -- a CSRF token, a CSP nonce, the
+     * signed-in user -- use {@see shareForRequest()}. Putting those here would
+     * hand one request's token to the next one on a long-running worker.
      */
     public function share(string $key, mixed $value): void
     {
-        $this->shared[$key] = $value;
+        $this->globals[$key] = $value;
+    }
+
+    /**
+     * Share a variable with every view rendered for the current request.
+     *
+     * Overrides a global of the same name, and is discarded by
+     * {@see forgetRequestState()} when the request ends.
+     */
+    public function shareForRequest(string $key, mixed $value): void
+    {
+        $this->state()->shared[$key] = $value;
+    }
+
+    /**
+     * The rendering state for the calling request, created on demand.
+     */
+    private function state(): RenderState
+    {
+        return $this->states[ExecutionContext::id()] ??= new RenderState();
+    }
+
+    /**
+     * Discard the calling request's rendering state.
+     *
+     * Long-running runtimes call this after every request, through
+     * {@see \Kayra\Foundation\Application::terminate()}. Only this context's
+     * state is dropped: other requests may still be mid-render.
+     */
+    public function forgetRequestState(): void
+    {
+        unset($this->states[ExecutionContext::id()]);
     }
 
     public function exists(string $view): bool
@@ -99,19 +149,20 @@ final class Factory
      */
     public function render(string $view, array $data = []): string
     {
+        $state = $this->state();
         $content = $this->renderOne($view, $data);
 
         // Walk the @extends chain outwards. Each parent renders with the
         // sections the child already captured.
-        while ($this->depth === 0 && $this->parent !== null) {
-            $parent = $this->parent;
-            $this->parent = null;
+        while ($state->depth === 0 && $state->parent !== null) {
+            $parent = $state->parent;
+            $state->parent = null;
             $content = $this->renderOne($parent, $data);
         }
 
-        if ($this->depth === 0) {
-            $this->sections = [];
-            $this->sectionStack = [];
+        if ($state->depth === 0) {
+            $state->sections = [];
+            $state->sectionStack = [];
         }
 
         return $content;
@@ -122,13 +173,34 @@ final class Factory
      */
     private function renderOne(string $view, array $data): string
     {
-        $path = $this->compiled($this->resolve($view));
+        $source = $this->resolve($view);
+        $path = $this->compiled($source);
+        $state = $this->state();
 
-        $this->depth++;
+        $state->depth++;
         $level = ob_get_level();
 
         try {
-            return $this->evaluate($path, [...$this->shared, ...$data]);
+            return $this->evaluate($path, [...$this->globals, ...$state->shared, ...$data]);
+        } catch (ParseError $e) {
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+
+            // The raw error points at a hashed file in the cache directory,
+            // which tells the author nothing. Name the template they wrote.
+            throw new RuntimeException(
+                sprintf(
+                    'Template [%s] compiled to invalid PHP: %s. This is usually an unclosed '
+                    . 'directive -- note that a directive is only recognised when it does not '
+                    . 'directly follow a word character, so "text@endif" is literal text and '
+                    . '"text @endif" is the directive. Compiled copy: %s.',
+                    $source,
+                    $e->getMessage(),
+                    $path,
+                ),
+                previous: $e,
+            );
         } catch (Throwable $e) {
             // Drop any buffers the template opened before it failed, otherwise
             // the error page renders inside a half-finished template.
@@ -138,7 +210,7 @@ final class Factory
 
             throw $e;
         } finally {
-            $this->depth--;
+            $state->depth--;
         }
     }
 
@@ -288,18 +360,18 @@ final class Factory
 
     public function extend(string $view): void
     {
-        $this->parent = $view;
+        $this->state()->parent = $view;
     }
 
     public function startSection(string $name): void
     {
-        $this->sectionStack[] = $name;
+        $this->state()->sectionStack[] = $name;
         ob_start();
     }
 
     public function setSection(string $name, string $content): void
     {
-        $this->sections[$name] = $content;
+        $this->state()->sections[$name] = $content;
     }
 
     /**
@@ -307,25 +379,27 @@ final class Factory
      */
     public function endSection(bool $echo = false): string
     {
-        if ($this->sectionStack === []) {
+        $state = $this->state();
+
+        if ($state->sectionStack === []) {
             throw new RuntimeException('@endsection without a matching @section.');
         }
 
-        $name = array_pop($this->sectionStack);
+        $name = array_pop($state->sectionStack);
         $content = (string) ob_get_clean();
 
         // A child template renders first. When the parent later defines the same
         // section, the child's version wins and @parent pulls in the parent's.
-        $this->sections[$name] = isset($this->sections[$name])
-            ? str_replace(self::PARENT_PLACEHOLDER, $content, $this->sections[$name])
+        $state->sections[$name] = isset($state->sections[$name])
+            ? str_replace(self::PARENT_PLACEHOLDER, $content, $state->sections[$name])
             : $content;
 
-        return $echo ? $this->sections[$name] : '';
+        return $echo ? $state->sections[$name] : '';
     }
 
     public function yieldSection(string $name, string $default = ''): string
     {
-        $content = $this->sections[$name] ?? $default;
+        $content = $this->state()->sections[$name] ?? $default;
 
         // Any @parent left unresolved has no parent content to pull in.
         return str_replace(self::PARENT_PLACEHOLDER, '', $content);
@@ -338,7 +412,7 @@ final class Factory
 
     public function hasSection(string $name): bool
     {
-        return isset($this->sections[$name]);
+        return isset($this->state()->sections[$name]);
     }
 
     /* --------------------------------------------------------------------
@@ -346,7 +420,8 @@ final class Factory
      * -------------------------------------------------------------------- */
 
     /**
-     * @param array<string, mixed> $__data
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $extra
      */
     public function include(string $view, array $data = [], array $extra = []): string
     {
@@ -357,7 +432,8 @@ final class Factory
     }
 
     /**
-     * @param array<string, mixed> $__data
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $extra
      */
     public function includeIf(string $view, array $data = [], array $extra = []): string
     {
@@ -365,7 +441,8 @@ final class Factory
     }
 
     /**
-     * @param array<string, mixed> $__data
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $extra
      */
     public function includeWhen(bool $condition, string $view = '', array $data = [], array $extra = []): string
     {
@@ -380,15 +457,17 @@ final class Factory
     {
         $count = is_countable($subject) ? count($subject) : null;
 
-        $this->loopStack[] = new LoopState(
+        $state = $this->state();
+
+        $state->loopStack[] = new LoopState(
             $count ?? 0,
-            end($this->loopStack) ?: null,
+            end($state->loopStack) ?: null,
         );
     }
 
     public function incrementLoop(): LoopState
     {
-        $loop = end($this->loopStack);
+        $loop = end($this->state()->loopStack);
 
         if ($loop === false) {
             throw new RuntimeException('Loop state requested outside a loop.');
@@ -401,7 +480,7 @@ final class Factory
 
     public function popLoop(): LoopState
     {
-        $loop = array_pop($this->loopStack);
+        $loop = array_pop($this->state()->loopStack);
 
         if ($loop === null) {
             throw new RuntimeException('Loop stack underflow.');
@@ -423,13 +502,14 @@ final class Factory
      */
     public function csrfField(): string
     {
-        $token = $this->shared['csrf_token'] ?? null;
+        $token = $this->state()->shared['csrf_token'] ?? $this->globals['csrf_token'] ?? null;
 
         if (!is_string($token) || $token === '') {
             throw new RuntimeException(
-                '@csrf was used but no CSRF token is available. KayraPHP has no session layer yet, '
-                . 'so nothing populates one. Either remove @csrf, or share a token yourself with '
-                . '$views->share(\'csrf_token\', $token) and verify it on the receiving route.',
+                '@csrf was used but no CSRF token is available for this request. The token is '
+                . 'published by the StartSession middleware, so the route needs the `web` or '
+                . '`session` middleware group. Outside an HTTP request, share one yourself with '
+                . '$views->shareForRequest(\'csrf_token\', $token).',
             );
         }
 
@@ -437,6 +517,61 @@ final class Factory
             '<input type="hidden" name="_token" value="%s">',
             htmlspecialchars($token, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
         );
+    }
+
+    /**
+     * Back the @can / @cannot directives.
+     *
+     * With no gate available — a view rendered outside an application, in a
+     * test or a mail preview — this denies rather than failing, which is the
+     * safe direction.
+     */
+    public function can(string $ability, mixed ...$arguments): bool
+    {
+        return $this->gate()?->allows($ability, ...$arguments) ?? false;
+    }
+
+    /**
+     * Resolve the gate on first use.
+     *
+     * Deferred on purpose: building a gate pulls in the whole auth stack, and
+     * most renders — every console-compiled template, every page with no @can —
+     * never need one.
+     */
+    private function gate(): ?Gate
+    {
+        $state = $this->state();
+
+        // Resolve at most once per request, whatever the outcome. Caching the
+        // Gate on the factory instead would answer every later request with the
+        // permissions of whoever happened to be signed in for the first one.
+        if (!$state->gateResolved && $this->gateResolver !== null) {
+            $state->gateResolved = true;
+
+            try {
+                $state->gate = ($this->gateResolver)();
+            } catch (Throwable) {
+                // No auth stack in this context; @can denies.
+                $state->gate = null;
+            }
+        }
+
+        return $state->gate;
+    }
+
+    /**
+     * @internal Called by the auth service provider.
+     *
+     * @param (Closure(): Gate)|null $resolver
+     */
+    public function setGateResolver(?Closure $resolver): void
+    {
+        $this->gateResolver = $resolver;
+
+        foreach ($this->states as $state) {
+            $state->gate = null;
+            $state->gateResolved = false;
+        }
     }
 
     public function methodField(string $method): string

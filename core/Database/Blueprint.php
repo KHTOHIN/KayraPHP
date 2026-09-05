@@ -124,10 +124,12 @@ final class Blueprint
      */
     public function nullable(): self
     {
-        $index = count($this->columns) - 1;
+        $index = array_key_last($this->columns);
 
-        if ($index >= 0) {
-            $this->columns[$index] = str_replace(' NOT NULL', ' NULL', $this->columns[$index]);
+        if ($index !== null) {
+            $columns = $this->columns;
+            $columns[$index] = str_replace(' NOT NULL', ' NULL', $columns[$index]);
+            $this->columns = array_values($columns);
         }
 
         return $this;
@@ -141,9 +143,9 @@ final class Blueprint
      */
     public function default(string|int|float|bool|null $value): self
     {
-        $index = count($this->columns) - 1;
+        $index = array_key_last($this->columns);
 
-        if ($index < 0) {
+        if ($index === null) {
             return $this;
         }
 
@@ -155,7 +157,9 @@ final class Blueprint
             default => "'" . str_replace("'", "''", $value) . "'",
         };
 
-        $this->columns[$index] .= ' DEFAULT ' . $literal;
+        $columns = $this->columns;
+        $columns[$index] .= ' DEFAULT ' . $literal;
+        $this->columns = array_values($columns);
 
         return $this;
     }

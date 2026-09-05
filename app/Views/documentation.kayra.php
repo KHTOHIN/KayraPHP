@@ -128,9 +128,12 @@ Route::redirect('/old', '/new', 301);</code></pre>
     }
 }</code></pre>
 
-    <p>Built in: <code>TrustProxies</code>, <code>HandleCors</code>, <code>SecurityHeaders</code>,
-       <code>MethodOverride</code>. Register global middleware in <code>config/app.php</code>
-       and per-route aliases under <code>middleware_aliases</code>.</p>
+    <p>Global, in order: <code>TrustProxies</code>, <code>ValidateHost</code>,
+       <code>HandleCors</code>, <code>SecurityHeaders</code>, <code>MethodOverride</code>.
+       Available as route aliases: <code>auth</code>, <code>can</code>, <code>throttle</code>,
+       <code>signed</code>, <code>bindings</code>, and the <code>session</code> and
+       <code>web</code> groups. Register your own in <code>config/app.php</code> under
+       <code>middleware_aliases</code>; an alias whose value is a list becomes a group.</p>
 
     <h2>Runtimes</h2>
     <p>The same application runs unchanged under php-fpm, the built-in server, or Swoole.
@@ -138,8 +141,93 @@ Route::redirect('/old', '/new', 301);</code></pre>
        response out. Set <code>APP_RUNTIME</code> to <code>auto</code>, <code>fpm</code> or
        <code>swoole</code>.</p>
 
+    <h2>Database and the ORM</h2>
+    <p>A model is a class with a table. Mass assignment is closed by default: a key that is not in
+       <code>$fillable</code> throws rather than being quietly dropped, so a request body can never
+       reach a column nobody listed.</p>
+
+    <pre style="overflow-x:auto"><code>final class Post extends Model
+{
+    protected string $table = 'posts';
+
+    // user_id is absent on purpose: ownership comes from the session.
+    protected array $fillable = ['title', 'body'];
+    protected array $casts    = ['created_at' =&gt; 'datetime'];
+
+    public function author(): BelongsTo
+    {
+        return $this-&gt;belongsTo(User::class, 'user_id');
+    }
+}
+
+Post::with('author')-&gt;orderBy('created_at', 'DESC')-&gt;get();  // one query for the authors, not N</code></pre>
+
+    <p>Migrations live in <code>database/migrations</code> and run with <code>kayra migrate</code>
+       (<code>migrate:rollback</code>, <code>migrate:fresh</code>, <code>migrate:status</code>).</p>
+
+    <h2>Route model binding</h2>
+    <p>A parameter type hint is the whole declaration. <code>/posts/{post}</code> with an action of
+       <code>edit(Post $post)</code> receives the record; an id that matches nothing is a 404 before
+       the controller is constructed. Override <code>getRouteKeyName()</code> to match on a slug
+       instead of an id.</p>
+    <p>This happens in middleware rather than in the action for one reason: authorization runs
+       first, and a policy asked "may this user edit post 7" needs post 7, not the string "7".</p>
+
+    <h2>Authentication</h2>
+    <p>Guards answer "who is this". <code>SessionGuard</code> for browsers, <code>TokenGuard</code>
+       for APIs; both read from a <code>UserProvider</code>, configured in <code>config/auth.php</code>.
+       Logging in regenerates the session id, so a fixed session cannot survive the privilege change.
+       Passwords are bcrypt or argon2id, never reversible.</p>
+    <p>Put <code>auth</code> on a route to require an identity, and <code>throttle:10,1</code> on
+       anything that takes a password &mdash; a login form with no rate limit is a credential-stuffing
+       endpoint.</p>
+
+    <h2>Authorization</h2>
+    <p>Gates and policies answer "may they". Denial is the default: an ability with no rule is
+       refused, so forgetting to write one locks the door rather than opening it.</p>
+
+    <pre style="overflow-x:auto"><code>// config/auth.php
+'policies' =&gt; [Post::class =&gt; PostPolicy::class],
+
+// routes
+Route::get('/posts/{post}/edit', [PostController::class, 'edit'])
+    -&gt;middleware('can:update,post');
+
+// the controller, again -- the route is the fence, this is the lock
+$this-&gt;authorize('update', $post);
+
+// and the view, so the page never offers a link that answers 403
+@@can('update', $post) &lt;a href="..."&gt;Edit&lt;/a&gt; @@endcan</code></pre>
+
+    <h2>Validation</h2>
+    <p><code>validate()</code> returns only the fields that had rules, so an unvalidated key cannot
+       reach a mass-assignment call. <code>safe()</code> returns the same data readable as the types
+       the rules just established, which is what keeps controllers free of casts.</p>
+
+    <pre style="overflow-x:auto"><code>$input = Validator::make($request-&gt;all(), [
+    'title' =&gt; 'required|string|min:3|max:200',
+    'age'   =&gt; 'nullable|integer|between:13,120',
+])-&gt;safe();
+
+$title = $input-&gt;string('title');   // a string, not a mixed you have to cast</code></pre>
+
+    <h2>Sessions, CSRF and view state</h2>
+    <p>The <code>web</code> group starts the session, verifies the CSRF token on unsafe methods,
+       substitutes route bindings, and publishes <code>$errors</code>, <code>$old</code>,
+       <code>$status</code> and <code>$currentUser</code> to every view &mdash; so a form can be
+       redrawn with what the user typed without every controller passing it along.</p>
+    <p><code>@@csrf</code> throws when no token is available rather than emitting an empty field. A
+       form carrying <code>&lt;input name="_token" value=""&gt;</code> looks protected in review and
+       is not, which is worse than no directive at all.</p>
+
+    <h2>Concurrency</h2>
+    <p>Request-scoped state is partitioned by execution context &mdash; Swoole coroutine, fiber, or
+       the single php-fpm request. That covers the container's scoped bindings, the guard, the gate,
+       and the view factory's per-request state. Under php-fpm it costs one boolean check; under a
+       worker runtime it is the difference between "scoped" being a claim and being true.</p>
+
     <h2>Not implemented yet</h2>
-    <p>Stated plainly so nothing here is a surprise. There is currently no database layer, ORM,
-       migrations, authentication, sessions, cache abstraction, queues, events or mail. Those come
-       after the core is stable &mdash; building them on a moving foundation is what forces rewrites.</p>
+    <p>Stated plainly so nothing here is a surprise. There is no cache abstraction, queue, event
+       dispatcher, mail layer, broadcasting or file-storage abstraction. Those come after the core
+       is stable &mdash; building them on a moving foundation is what forces rewrites.</p>
 @endsection

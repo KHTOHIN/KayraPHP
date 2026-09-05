@@ -105,6 +105,35 @@ abstract class Controller
     }
 
     /**
+     * Authorize an ability, or stop the request.
+     *
+     * Throws AuthorizationException, which carries the status the policy chose
+     * — 403, or 404 where the record's existence is itself privileged.
+     *
+     * @throws \Kayra\Auth\Access\AuthorizationException
+     */
+    protected function authorize(string $ability, mixed ...$arguments): void
+    {
+        $this->app()->get(\Kayra\Auth\Access\Gate::class)->authorize($ability, ...$arguments);
+    }
+
+    /**
+     * Whether the current user may do something.
+     */
+    protected function can(string $ability, mixed ...$arguments): bool
+    {
+        return $this->app()->get(\Kayra\Auth\Access\Gate::class)->allows($ability, ...$arguments);
+    }
+
+    /**
+     * The authenticated user, if any.
+     */
+    protected function user(): ?\Kayra\Auth\Authenticatable
+    {
+        return $this->app()->get(\Kayra\Auth\AuthManager::class)->user();
+    }
+
+    /**
      * The current request.
      */
     protected function request(): Request

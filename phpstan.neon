@@ -12,9 +12,9 @@ parameters:
     treatPhpDocTypesAsCertain: false
     checkMissingCallableSignature: true
 
-    # phpstan-baseline.neon records annotation debt: missing type annotations and
-    # mixed-casts, not defects. Findings that indicated real problems were fixed
-    # rather than baselined.
+    # phpstan-baseline.neon holds annotation debt — missing generics, callable
+    # signatures, and mixed-casts. Every finding that indicated a real defect
+    # was fixed rather than baselined; the entries here change no behaviour.
     #
     # The baseline must only ever shrink. CI fails on any new error, so the
     # ratchet turns one way. Regenerate deliberately, never as a reflex:

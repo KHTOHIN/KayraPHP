@@ -92,6 +92,20 @@ final class Validator
         return $this->validated;
     }
 
+    /**
+     * Validate and return the result as typed, read-only input.
+     *
+     * The same data as {@see validate()}, but readable as the types the rules
+     * already established -- `$safe->string('name')` instead of casting a mixed
+     * array value and hoping.
+     *
+     * @throws ValidationException
+     */
+    public function safe(): Validated
+    {
+        return new Validated($this->validate());
+    }
+
     public function passes(): bool
     {
         $this->run();
@@ -158,7 +172,7 @@ final class Validator
 
                 [$name, $parameters] = $this->parseRule($rule);
 
-                if (!$this->check($name, $parameters, $field, $value)) {
+                if (!$this->check($name, $parameters, $field, $value, $this->ruleNames($rules))) {
                     $failed = true;
 
                     // One message per field: a list of six complaints about the
@@ -210,8 +224,9 @@ final class Validator
 
     /**
      * @param list<string> $parameters
+     * @param list<string> $names      Every rule declared for this field.
      */
-    private function check(string $rule, array $parameters, string $field, mixed $value): bool
+    private function check(string $rule, array $parameters, string $field, mixed $value, array $names = []): bool
     {
         if (isset($this->extensions[$rule])) {
             $result = ($this->extensions[$rule])($value, $parameters, $this->data);
@@ -236,15 +251,18 @@ final class Validator
             'url'       => is_string($value) && filter_var($value, FILTER_VALIDATE_URL) !== false,
             'ip'        => is_string($value) && filter_var($value, FILTER_VALIDATE_IP) !== false,
             'uuid'      => is_string($value) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) === 1,
-            'alpha'     => is_string($value) && preg_match('/^[\p{L}]+$/u', $value) === 1,
-            'alpha_num' => is_string($value) && preg_match('/^[\p{L}\p{N}]+$/u', $value) === 1,
-            'alpha_dash' => is_string($value) && preg_match('/^[\p{L}\p{N}_-]+$/u', $value) === 1,
+            // \p{M} is not decoration. In Bengali, Devanagari, Thai, Arabic and
+            // decomposed Latin, vowel signs and accents are separate combining
+            // marks -- so without it "সোনার" and an NFD "café" are not alphabetic.
+            'alpha'     => is_string($value) && preg_match('/^[\p{L}\p{M}]+$/u', $value) === 1,
+            'alpha_num' => is_string($value) && preg_match('/^[\p{L}\p{M}\p{N}]+$/u', $value) === 1,
+            'alpha_dash' => is_string($value) && preg_match('/^[\p{L}\p{M}\p{N}_-]+$/u', $value) === 1,
             'date'      => is_string($value) && strtotime($value) !== false,
-            'min'       => $this->compareSize($value, (float) ($parameters[0] ?? 0), '>='),
-            'max'       => $this->compareSize($value, (float) ($parameters[0] ?? 0), '<='),
-            'between'   => $this->compareSize($value, (float) ($parameters[0] ?? 0), '>=')
-                            && $this->compareSize($value, (float) ($parameters[1] ?? 0), '<='),
-            'size'      => $this->compareSize($value, (float) ($parameters[0] ?? 0), '=='),
+            'min'       => $this->compareSize($value, (float) ($parameters[0] ?? 0), '>=', $names),
+            'max'       => $this->compareSize($value, (float) ($parameters[0] ?? 0), '<=', $names),
+            'between'   => $this->compareSize($value, (float) ($parameters[0] ?? 0), '>=', $names)
+                            && $this->compareSize($value, (float) ($parameters[1] ?? 0), '<=', $names),
+            'size'      => $this->compareSize($value, (float) ($parameters[0] ?? 0), '==', $names),
             'in'        => in_array((string) (is_scalar($value) ? $value : ''), $parameters, true),
             'not_in'    => !in_array((string) (is_scalar($value) ? $value : ''), $parameters, true),
             'regex'     => is_string($value) && @preg_match($parameters[0] ?? '//', $value) === 1,
@@ -256,7 +274,7 @@ final class Validator
         };
 
         if (!$passed) {
-            $this->addError($field, $rule, $this->message($field, $rule, $parameters));
+            $this->addError($field, $rule, $this->message($field, $rule, $parameters, $value, $names));
         }
 
         return $passed;
@@ -283,13 +301,22 @@ final class Validator
      * Size means length for strings, count for arrays, and value for numbers —
      * so `min:8` reads correctly for a password and for an age.
      */
-    private function compareSize(mixed $value, float $limit, string $operator): bool
+    /**
+     * @param list<string> $names Every rule declared for the field.
+     */
+    private function compareSize(mixed $value, float $limit, string $operator, array $names = []): bool
     {
         // A numeric *string* is measured by length, not value: `max:8` on a
-        // password means eight characters, not the number eight. The earlier
-        // arms already cover every case, so a trailing is_numeric() check would
-        // be unreachable.
+        // password means eight characters, not the number eight.
+        //
+        // Unless the field was declared numeric. `integer|between:13,120` is an
+        // age range, and measuring "42" as two characters made every real age
+        // fail -- so a declared number is compared as one, before any cast has
+        // happened.
+        $numeric = in_array('integer', $names, true) || in_array('numeric', $names, true);
+
         $size = match (true) {
+            $numeric && is_string($value) && is_numeric($value) => (float) $value,
             is_string($value) => (float) mb_strlen($value),
             is_array($value)  => (float) count($value),
             is_int($value), is_float($value) => (float) $value,
@@ -314,7 +341,7 @@ final class Validator
      */
     private function cast(array $rules, mixed $value): mixed
     {
-        $names = array_map(fn (string $r): string => $this->parseRule(trim($r))[0], array_map(strval(...), $rules));
+        $names = $this->ruleNames($rules);
 
         if (in_array('integer', $names, true) && is_string($value)) {
             return (int) $value;
@@ -337,8 +364,15 @@ final class Validator
 
     /**
      * @param list<string> $parameters
+     * @param list<string> $names      Every rule declared for this field.
      */
-    private function message(string $field, string $rule, array $parameters): string
+    private function message(
+        string $field,
+        string $rule,
+        array $parameters,
+        mixed $value = null,
+        array $names = [],
+    ): string
     {
         if (isset($this->messages["{$field}.{$rule}"])) {
             return $this->messages["{$field}.{$rule}"];
@@ -351,6 +385,11 @@ final class Validator
         $label = str_replace('_', ' ', $field);
         $first = $parameters[0] ?? '';
 
+        // "at least 3" is ambiguous; "at least 3 characters" is not. The size
+        // rules measure different things depending on what they were given, so
+        // the message has to say which.
+        $unit = $this->sizeUnit($value, $names);
+
         return match ($rule) {
             'required'  => "The {$label} field is required.",
             'email'     => "The {$label} field must be a valid email address.",
@@ -360,16 +399,55 @@ final class Validator
             'boolean'   => "The {$label} field must be true or false.",
             'array'     => "The {$label} field must be an array.",
             'string'    => "The {$label} field must be a string.",
-            'min'       => "The {$label} field must be at least {$first}.",
-            'max'       => "The {$label} field must not be greater than {$first}.",
-            'between'   => "The {$label} field must be between {$first} and " . ($parameters[1] ?? '') . '.',
-            'size'      => "The {$label} field must be {$first}.",
+            'min'       => "The {$label} field must be at least {$first}{$unit}.",
+            'max'       => "The {$label} field must not be greater than {$first}{$unit}.",
+            'between'   => "The {$label} field must be between {$first} and "
+                            . ($parameters[1] ?? '') . $unit . '.',
+            'size'      => "The {$label} field must be {$first}{$unit}.",
             'in'        => "The selected {$label} is invalid.",
             'confirmed' => "The {$label} field confirmation does not match.",
             'same'      => "The {$label} field must match {$first}.",
             'accepted'  => "The {$label} field must be accepted.",
             default     => "The {$label} field is invalid.",
         };
+    }
+
+    /**
+     * What a size rule counts for this value, phrased for a message.
+     *
+     * Mirrors compareSize() exactly: a string is measured by length even when
+     * it looks like a number, an array by its count, and a real int or float by
+     * its own value.
+     */
+    /**
+     * @param list<string> $names Every rule declared for the field.
+     */
+    private function sizeUnit(mixed $value, array $names = []): string
+    {
+        if (in_array('integer', $names, true) || in_array('numeric', $names, true)) {
+            return '';
+        }
+
+        return match (true) {
+            is_string($value) => ' characters',
+            is_array($value)  => ' items',
+            default           => '',
+        };
+    }
+
+    /**
+     * The bare names of a field's rules, without their parameters.
+     *
+     * @param list<string> $rules
+     *
+     * @return list<string>
+     */
+    private function ruleNames(array $rules): array
+    {
+        return array_values(array_map(
+            fn (string $r): string => $this->parseRule(trim($r))[0],
+            array_map(strval(...), $rules),
+        ));
     }
 
     private function addError(string $field, string $rule, string $message): void

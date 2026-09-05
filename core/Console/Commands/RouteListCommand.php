@@ -105,7 +105,7 @@ final class RouteListCommand extends Command
             $handler instanceof Closure       => 'Closure',
             $handler instanceof ViewRoute     => "view: {$handler->view}",
             $handler instanceof RedirectRoute => "redirect: {$handler->to}",
-            is_array($handler)                => $this->shortClass((string) $handler[0]) . '@' . $handler[1],
+            is_array($handler)                => $this->shortClass((string) $handler[0]) . '@' . (string) ($handler[1] ?? '?'),
             is_string($handler)               => $this->shortClass($handler),
             default                           => get_debug_type($handler),
         };

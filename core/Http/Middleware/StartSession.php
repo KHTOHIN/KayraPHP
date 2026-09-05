@@ -45,7 +45,7 @@ final class StartSession implements MiddlewareInterface
 
         // Make the CSRF token available to @csrf without the view layer
         // reaching into the session itself.
-        $this->container->get(ViewFactory::class)->share('csrf_token', $session->token());
+        $this->container->get(ViewFactory::class)->shareForRequest('csrf_token', $session->token());
 
         $request = $request->withAttribute('session', $session);
 

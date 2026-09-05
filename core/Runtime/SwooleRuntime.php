@@ -9,6 +9,8 @@ use Kayra\Exceptions\Handler as ExceptionHandler;
 use Kayra\Foundation\Application;
 use Kayra\Http\Request;
 use Kayra\Http\Response;
+use Kayra\Runtime\Swoole\SwooleHttpResponse;
+use Kayra\Runtime\Swoole\SwooleHttpServer;
 use Psr\Http\Server\RequestHandlerInterface;
 use RuntimeException;
 use Throwable;
@@ -57,6 +59,11 @@ final class SwooleRuntime implements RuntimeInterface
 
         /** @var class-string $serverClass */
         $serverClass = '\Swoole\Http\Server';
+
+        // Swoole\Http\Server only exists when the extension is loaded, so it is
+        // constructed dynamically and described by a local interface. See
+        // Kayra\Runtime\Swoole\SwooleHttpServer for why.
+        /** @var SwooleHttpServer $server */
         $server = new $serverClass($this->host, $this->port);
 
         $server->set([
@@ -67,6 +74,7 @@ final class SwooleRuntime implements RuntimeInterface
         ]);
 
         $server->on('request', function (object $swooleRequest, object $swooleResponse) use ($kernel): void {
+            /** @var SwooleHttpResponse $swooleResponse */
             try {
                 try {
                     $request = Request::fromSwoole($swooleRequest);
@@ -103,6 +111,7 @@ final class SwooleRuntime implements RuntimeInterface
 
     private function send(\Psr\Http\Message\ResponseInterface $response, object $swooleResponse): void
     {
+        /** @var SwooleHttpResponse $swooleResponse */
         $swooleResponse->status($response->getStatusCode());
 
         $lines = $response instanceof Response

@@ -22,13 +22,13 @@ final class ServeCommand extends Command
     protected function run_(): int
     {
         $host = (string) $this->option('host');
-        $port = (int) $this->option('port');
+        $requested = (int) $this->option('port');
         $tries = max(1, (int) $this->option('tries'));
 
-        $port = $this->availablePort($host, $port, $tries);
+        $port = $this->availablePort($host, $requested, $tries);
 
         if ($port === null) {
-            $this->io->error("No free port found starting at {$this->option('port')}.");
+            $this->io->error("No free port found starting at {$requested}.");
 
             return self::FAILURE;
         }

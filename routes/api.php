@@ -16,7 +16,7 @@ Route::group(['prefix' => 'api/v1', 'name' => 'api.v1.'], function (): void {
 
     Route::apiResource('users', UserController::class);
 
-    Route::group(['middleware' => 'auth'], function (): void {
+    Route::group(['middleware' => 'auth.demo'], function (): void {
         Route::get('/me', [UserController::class, 'me'])->name('me');
     });
 });

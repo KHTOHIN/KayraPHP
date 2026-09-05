@@ -39,6 +39,9 @@ final class ContextualBindingBuilder
         return $this;
     }
 
+    /**
+     * @param (Closure(Container): mixed)|string $give A container id, or a factory.
+     */
     public function give(Closure|string $give): void
     {
         if ($this->need === '') {

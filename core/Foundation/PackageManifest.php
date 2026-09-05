@@ -97,10 +97,12 @@ final class PackageManifest
      */
     public function rebuild(): array
     {
-        $this->manifest = $this->build();
-        $this->write($this->manifest);
+        $manifest = $this->build();
 
-        return $this->manifest;
+        $this->manifest = $manifest;
+        $this->write($manifest);
+
+        return $manifest;
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Kayra\Foundation;
 use Kayra\Config\Repository;
 use Kayra\Container\Container;
 use Kayra\Env\Env;
+use Kayra\View\Factory as ViewFactory;
 use RuntimeException;
 
 /**
@@ -356,6 +357,13 @@ final class Application extends Container
      */
     public function terminate(): void
     {
+        // The view factory is a singleton, so its per-request state is not
+        // covered by forgetScoped(). hasInstance() keeps this from building a
+        // factory for a request that never rendered anything.
+        if ($this->hasInstance(ViewFactory::class)) {
+            $this->get(ViewFactory::class)->forgetRequestState();
+        }
+
         $this->forgetScoped();
     }
 }

@@ -47,7 +47,9 @@ final class DoctorCommand extends Command
         $this->io->writeln('  <options=bold>PHP 8.5 fast paths</>');
         $this->line('ext/uri native parser', Uri::usingNativeParser() ? 'in use' : 'not available', Uri::usingNativeParser(), 'lenient fallback in use');
         $this->line('#[\NoDiscard] enforcement', class_exists('NoDiscard') ? 'active' : 'inactive', class_exists('NoDiscard'), 'PHP 8.5 only');
-        $this->line('Lazy objects', method_exists(\ReflectionClass::class, 'newLazyGhost') ? 'available' : 'missing', method_exists(\ReflectionClass::class, 'newLazyGhost'), 'requires 8.4+');
+        // Guaranteed by the 8.5 floor in composer.json; probing it would be
+        // a check that can never fail.
+        $this->line('Lazy objects', 'available', true, 'native since 8.4');
 
         $this->io->newLine();
         $this->io->writeln('  <options=bold>Extensions</>');

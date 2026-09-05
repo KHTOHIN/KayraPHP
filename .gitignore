@@ -11,8 +11,13 @@
 /storage/logs/*
 /storage/framework/views/*
 /storage/framework/phpunit/*
-!/storage/**/.gitignore
 
+# Live session payloads and rate-limiter counters. Sessions carry the signed-in
+# user's identity, so committing one would publish a usable credential.
+/storage/framework/sessions/*
+/storage/framework/limiter/*
+
+!/storage/**/.gitignore
 .phpunit.result.cache
 /.idea/
 /.vscode/

@@ -247,4 +247,131 @@ final class HttpMessageTest extends TestCase
         yield 'leading dots'      => ['...hidden', 'hidden'];
         yield 'empty'             => ['', 'upload'];
     }
+
+    /* --------------------------------------------------------------------
+     | Form bodies
+     |
+     | $_POST is populated by the SAPI only for POST. Everything else -- a PUT
+     | or PATCH carrying a form, a request built by hand, a non-SAPI runtime --
+     | has to read the body itself.
+     * -------------------------------------------------------------------- */
+
+    #[Test]
+    public function a_put_with_a_form_body_is_readable(): void
+    {
+        $request = new Request(
+            'PUT',
+            'http://localhost/posts/1',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            Stream::of('title=Renamed&body=Rewritten'),
+        );
+
+        $this->assertSame(['title' => 'Renamed', 'body' => 'Rewritten'], $request->all());
+        $this->assertSame('Renamed', $request->input('title'));
+    }
+
+    #[Test]
+    public function an_explicitly_parsed_body_still_wins(): void
+    {
+        // withParsedBody() is what the SAPI path uses. It must not be second
+        //-guessed by re-reading the stream.
+        $request = new Request(
+            'POST',
+            'http://localhost/x',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            Stream::of('from=stream'),
+        )->withParsedBody(['from' => 'sapi']);
+
+        $this->assertSame('sapi', $request->input('from'));
+    }
+
+    #[Test]
+    public function a_body_that_is_not_a_form_is_not_guessed_at(): void
+    {
+        // parse_str() will turn anything into an array. An opaque payload must
+        // read as absent, not as a nonsense field.
+        $request = new Request(
+            'POST',
+            'http://localhost/x',
+            ['Content-Type' => 'application/octet-stream'],
+            Stream::of("\x00\x01binary=nope"),
+        );
+
+        $this->assertSame([], $request->all());
+    }
+
+    #[Test]
+    public function the_query_string_still_merges_under_the_body(): void
+    {
+        $request = new Request(
+            'PATCH',
+            'http://localhost/x?page=2&title=from-query',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            Stream::of('title=from-body'),
+        );
+
+        $this->assertSame('from-body', $request->input('title'));
+        $this->assertSame('2', $request->input('page'));
+    }
+
+    #[Test]
+    public function replacing_the_body_invalidates_the_form_memo(): void
+    {
+        // The same trap the JSON memo had: a request must not report the
+        // contents of a stream it no longer holds.
+        $request = new Request(
+            'PUT',
+            'http://localhost/x',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            Stream::of('who=first'),
+        );
+
+        $this->assertSame('first', $request->input('who'));
+
+        $replaced = $request->withBody(Stream::of('who=second'));
+
+        $this->assertSame('second', $replaced->input('who'));
+        $this->assertSame('first', $request->input('who'), 'the original must be unchanged');
+    }
+
+    #[Test]
+    public function a_form_body_is_read_only_once(): void
+    {
+        $request = new Request(
+            'PUT',
+            'http://localhost/x',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            Stream::of('a=1&b=2'),
+        );
+
+        $this->assertSame($request->all(), $request->all());
+        $this->assertSame('1', $request->input('a'));
+    }
+
+    #[Test]
+    public function the_uri_query_seeds_the_query_parameters(): void
+    {
+        // PSR-7 permits this and the reference implementations skip it, which
+        // is why a hand-built request normally reads its own query as empty.
+        $request = new Request('GET', 'http://localhost/search?q=kayra&page=3');
+
+        $this->assertSame(['q' => 'kayra', 'page' => '3'], $request->getQueryParams());
+    }
+
+    #[Test]
+    public function explicit_query_parameters_replace_the_seeded_ones(): void
+    {
+        // fromGlobals() and the Swoole adapter both call this, so the SAPI
+        // stays the authority wherever there is one.
+        $request = new Request('GET', 'http://localhost/search?q=from-uri')
+            ->withQueryParams(['q' => 'from-sapi']);
+
+        $this->assertSame(['q' => 'from-sapi'], $request->getQueryParams());
+    }
+
+    #[Test]
+    public function a_uri_with_no_query_seeds_nothing(): void
+    {
+        $this->assertSame([], new Request('GET', 'http://localhost/plain')->getQueryParams());
+    }
 }

@@ -53,10 +53,10 @@ class Container implements ContainerInterface
     /** @var array<string, list<string>> */
     protected array $tags = [];
 
-    /** @var array<string, array<string, Closure|string>> */
+    /** @var array<string, array<string, (Closure(Container): mixed)|string>> */
     protected array $contextual = [];
 
-    /** @var array<string, list<Closure>> */
+    /** @var array<string, list<Closure(mixed, Container): mixed>> */
     protected array $extenders = [];
 
     /**
@@ -81,7 +81,7 @@ class Container implements ContainerInterface
      *
      * When a class is present here, {@see build()} never touches reflection.
      *
-     * @var array<class-string, list<array<string, mixed>>>
+     * @var array<class-string, list<array{k: 's', i: class-string}|array{k: 'v', v: mixed}|array{k: 'n'}>>
      */
     protected array $compiled = [];
 
@@ -115,6 +115,8 @@ class Container implements ContainerInterface
 
     /**
      * Register a transient binding: a new instance on every resolution.
+     *
+     * @param (Closure(Container, array<string, mixed>): mixed)|class-string|null $concrete
      */
     public function bind(string $id, Closure|string|null $concrete = null, bool $lazy = false): void
     {
@@ -123,6 +125,8 @@ class Container implements ContainerInterface
 
     /**
      * Register an application-lifetime binding.
+     *
+     * @param (Closure(Container, array<string, mixed>): mixed)|class-string|null $concrete
      */
     public function singleton(string $id, Closure|string|null $concrete = null, bool $lazy = false): void
     {
@@ -134,6 +138,8 @@ class Container implements ContainerInterface
      *
      * Scoped entries are destroyed by {@see forgetScoped()} at the end of each
      * request, which is what keeps long-running workers free of state leaks.
+     *
+     * @param (Closure(Container, array<string, mixed>): mixed)|class-string|null $concrete
      */
     public function scoped(string $id, Closure|string|null $concrete = null, bool $lazy = false): void
     {
@@ -241,6 +247,8 @@ class Container implements ContainerInterface
 
     /**
      * @internal Used by {@see ContextualBindingBuilder}.
+     *
+     * @param (Closure(Container): mixed)|string $give A container id, or a factory.
      */
     public function addContextualBinding(string $concrete, string $need, Closure|string $give): void
     {
@@ -374,23 +382,46 @@ class Container implements ContainerInterface
             if ($definition->concrete instanceof Closure) {
                 $factory = $definition->concrete;
 
-                return $reflector->newLazyProxy(fn (): mixed => $factory($this, []));
+                // The initialiser is handed the uninitialised proxy and must
+                // return the real instance. A factory that returns anything
+                // else is a configuration error, so say so here rather than
+                // letting PHP fail with a less specific message.
+                return $reflector->newLazyProxy(function (object $proxy) use ($factory, $class): object {
+                    $built = $factory($this, []);
+
+                    return is_object($built) ? $built : throw ContainerException::forStack(
+                        "The factory for [{$class}] must return an object, got " . get_debug_type($built) . '.',
+                        $this->stackGet(),
+                    );
+                });
+            }
+
+            $constructor = $reflector->getConstructor();
+
+            if ($constructor === null) {
+                // Nothing to initialise. A ghost still has to be given an
+                // initialiser, but calling __construct() on a class that has
+                // none is a fatal error the moment the object is touched.
+                return $reflector->newLazyGhost(static function (object $object): void {
+                });
             }
 
             // Snapshot the stack: the initializer runs later, outside this frame.
             $stack = $this->stackGet();
 
-            return $reflector->newLazyGhost(function (object $object) use ($class, $stack): void {
+            return $reflector->newLazyGhost(function (object $object) use ($class, $constructor, $stack): void {
                 $previous = $this->stackGet();
                 $this->stackSet($stack);
 
                 try {
-                    $arguments = $this->resolveArguments(
-                        $this->constructorParameters($class),
+                    // invokeArgs() rather than $object->__construct(): the ghost
+                    // is typed as a bare object here, and the reflection call is
+                    // the same construction without pretending otherwise.
+                    $constructor->invokeArgs($object, $this->resolveArguments(
+                        $constructor->getParameters(),
                         [],
                         $class,
-                    );
-                    $object->__construct(...$arguments);
+                    ));
                 } finally {
                     $this->stackSet($previous);
                 }
@@ -447,6 +478,7 @@ class Container implements ContainerInterface
         $arguments = [];
 
         foreach ($this->compiled[$class] as $parameter) {
+            // `k` discriminates the entry, so each arm sees only its own shape.
             $arguments[] = match ($parameter['k']) {
                 ContainerCompiler::KIND_SERVICE => $this->make($parameter['i']),
                 ContainerCompiler::KIND_VALUE   => $parameter['v'],
@@ -504,6 +536,13 @@ class Container implements ContainerInterface
     {
         if (array_key_exists($class, $this->constructorCache)) {
             return $this->constructorCache[$class];
+        }
+
+        if (!class_exists($class) && !interface_exists($class)) {
+            throw ContainerException::forStack(
+                "Cannot build [{$class}]: no such class or interface.",
+                $this->stackGet(),
+            );
         }
 
         $reflector = new ReflectionClass($class);
@@ -612,6 +651,9 @@ class Container implements ContainerInterface
         );
     }
 
+    /**
+     * @param (Closure(Container): mixed)|string $give A container id, or a factory.
+     */
     protected function resolveContextual(Closure|string $give): mixed
     {
         return $give instanceof Closure ? $give($this) : $this->make($give);
@@ -646,6 +688,23 @@ class Container implements ContainerInterface
         return class_exists($id) && (new ReflectionClass($id))->isInstantiable();
     }
 
+    /**
+     * Whether a concrete instance already exists, without creating one.
+     *
+     * `bound()` answers "is this id known?", which is true for anything with a
+     * definition. This answers "has it actually been built?", which is what a
+     * teardown routine needs: resolving a service purely to clean it up would
+     * construct the very thing the request never used.
+     */
+    public function hasInstance(string $id): bool
+    {
+        $id = $this->resolveAlias($id);
+        $context = ExecutionContext::id();
+
+        return array_key_exists($id, $this->singletons)
+            || (isset($this->scoped[$context]) && array_key_exists($id, $this->scoped[$context]));
+    }
+
     public function bound(string $id): bool
     {
         $id = $this->resolveAlias($id);
@@ -666,6 +725,7 @@ class Container implements ContainerInterface
      * Accepts closures, "Class@method" strings, [$object, 'method'] and
      * [Class::class, 'method'] pairs.
      *
+     * @param (callable(): mixed)|array{0: object|class-string, 1: string}|string $callback
      * @param array<string, mixed> $parameters
      */
     public function call(callable|array|string $callback, array $parameters = []): mixed
@@ -678,7 +738,9 @@ class Container implements ContainerInterface
     }
 
     /**
-     * @return array{0: callable, 1: ReflectionFunctionAbstract, 2: ?string}
+     * @param (callable(): mixed)|array{0: object|class-string, 1: string}|string $callback
+     *
+     * @return array{0: callable(): mixed, 1: ReflectionFunctionAbstract, 2: ?string}
      */
     protected function reflectCallable(callable|array|string $callback): array
     {
@@ -690,10 +752,16 @@ class Container implements ContainerInterface
         if (is_array($callback)) {
             [$target, $method] = $callback;
 
+            if (!is_string($method)) {
+                throw new ContainerException(
+                    'A [$target, $method] callable needs a method name, got ' . get_debug_type($method) . '.',
+                );
+            }
+
             $object = is_string($target) ? $this->make($target) : $target;
             $class = is_string($target) ? $target : $target::class;
 
-            if (!method_exists($object, $method)) {
+            if (!is_object($object) || !method_exists($object, $method)) {
                 throw new ContainerException("Method [{$class}::{$method}()] does not exist.");
             }
 
@@ -708,6 +776,15 @@ class Container implements ContainerInterface
             }
 
             return [$object, new ReflectionMethod($object, '__invoke'), $callback];
+        }
+
+        // Everything that is not a string has been handled above, so by here a
+        // non-callable can only be a string naming nothing callable.
+        if (!is_callable($callback)) {
+            throw new ContainerException(
+                "Cannot call [{$callback}]: it is neither a function, a \"Class@method\" string, "
+                . 'nor an invokable class.',
+            );
         }
 
         return [$callback, new ReflectionFunction($callback(...)), null];
@@ -744,11 +821,32 @@ class Container implements ContainerInterface
         $this->buildStacks = [];
     }
 
+    /**
+     * Remove an entry entirely: its definition, its instances and its extenders.
+     *
+     * Afterwards the id is unknown, so resolving it again autowires the class
+     * from scratch rather than using whatever factory was registered. When the
+     * intent is "rebuild this from its definition", use {@see forgetInstance()}.
+     */
     public function forget(string $id): void
     {
         $id = $this->resolveAlias($id);
 
         unset($this->singletons[$id], $this->definitions[$id], $this->extenders[$id]);
+        $this->forgetScopedEverywhere($id);
+    }
+
+    /**
+     * Drop the cached instance but keep the definition.
+     *
+     * The next resolution runs the registered factory again — which is what you
+     * want after changing configuration the factory reads.
+     */
+    public function forgetInstance(string $id): void
+    {
+        $id = $this->resolveAlias($id);
+
+        unset($this->singletons[$id]);
         $this->forgetScopedEverywhere($id);
     }
 

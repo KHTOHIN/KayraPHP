@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kayra\Tests\Unit;
 
+use Fiber;
 use Kayra\View\Compiler;
 use Kayra\View\Factory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -215,7 +216,7 @@ final class ViewTest extends TestCase
         $this->template('t', '<form>@csrf</form>');
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/no session layer/');
+        $this->expectExceptionMessageMatches('/no CSRF token is available/');
 
         $this->views->render('t');
     }
@@ -274,5 +275,157 @@ final class ViewTest extends TestCase
         $compiled = file_get_contents((string) (glob($this->cache . '/*.php') ?: [''])[0]);
 
         $this->assertStringContainsString('<?php if (', (string) $compiled);
+    }
+
+    /* --------------------------------------------------------------------
+     | Per-request state
+     |
+     | The factory is a singleton, so anything a request writes into it has to
+     | be partitioned by execution context. These tests are the reason
+     | RenderState exists; before it, every one of them failed.
+     * -------------------------------------------------------------------- */
+
+    #[Test]
+    public function a_global_share_reaches_every_render(): void
+    {
+        $this->template('t', '{{ $who }}');
+        $this->views->share('who', 'everyone');
+
+        $this->assertSame('everyone', $this->views->render('t'));
+    }
+
+    #[Test]
+    public function a_request_share_overrides_a_global_of_the_same_name(): void
+    {
+        $this->template('t', '{{ $who }}');
+        $this->views->share('who', 'global');
+        $this->views->shareForRequest('who', 'this request');
+
+        $this->assertSame('this request', $this->views->render('t'));
+    }
+
+    #[Test]
+    public function forgetting_request_state_drops_request_shares_but_keeps_globals(): void
+    {
+        $this->template('t', '{{ $who }}');
+        $this->views->share('who', 'global');
+        $this->views->shareForRequest('who', 'this request');
+
+        $this->views->forgetRequestState();
+
+        $this->assertSame('global', $this->views->render('t'));
+    }
+
+    #[Test]
+    public function request_state_is_separate_per_execution_context(): void
+    {
+        // Two fibers stand in for two concurrent requests on one worker. Each
+        // shares a value, then both render. Sharing a CSRF token this way is
+        // exactly what StartSession does, so a leak here is one session's token
+        // rendered into another session's form.
+        $this->template('t', '{{ $who }}');
+
+        $render = function (string $who): string {
+            $this->views->shareForRequest('who', $who);
+            Fiber::suspend();
+
+            return $this->views->render('t');
+        };
+
+        $a = new Fiber($render);
+        $b = new Fiber($render);
+
+        $a->start('request A');
+        $b->start('request B');
+
+        $a->resume();
+        $b->resume();
+
+        $this->assertSame('request A', $a->getReturn());
+        $this->assertSame('request B', $b->getReturn());
+    }
+
+    #[Test]
+    public function sections_do_not_leak_between_execution_contexts(): void
+    {
+        $this->template('t', '@yield("slot", "empty")');
+
+        $render = function (string $content): string {
+            $this->views->setSection('slot', $content);
+            Fiber::suspend();
+
+            return $this->views->render('t');
+        };
+
+        $a = new Fiber($render);
+        $b = new Fiber($render);
+
+        $a->start('from A');
+        $b->start('from B');
+
+        $a->resume();
+        $b->resume();
+
+        $this->assertSame('from A', $a->getReturn());
+        $this->assertSame('from B', $b->getReturn());
+    }
+
+    #[Test]
+    public function the_gate_is_resolved_once_per_request_not_once_per_process(): void
+    {
+        $this->template('t', "@can('edit')
+yes
+@else
+no
+@endcan");
+
+        $calls = 0;
+        $this->views->setGateResolver(function () use (&$calls): never {
+            $calls++;
+
+            // Throwing stands in for "no auth stack here". What matters is how
+            // many times the factory asks, not what it gets back.
+            throw new RuntimeException('no gate');
+        });
+
+        // Twice in one request: asked once, the answer reused.
+        $this->views->render('t');
+        $this->views->render('t');
+        $this->assertSame(1, $calls, 'the resolver should be memoised within a request');
+
+        // A new request must ask again. Caching the first request's gate would
+        // authorise every later request as whoever signed in first.
+        $this->views->forgetRequestState();
+        $this->views->render('t');
+        $this->assertSame(2, $calls, 'a new request must resolve its own gate');
+    }
+
+    #[Test]
+    public function can_denies_when_no_gate_is_available(): void
+    {
+        $this->template('t', "@can('edit')
+yes
+@else
+no
+@endcan");
+
+        $this->assertSame('no', trim($this->views->render('t')));
+    }
+
+    #[Test]
+    public function an_unclosed_directive_names_the_template_that_caused_it(): void
+    {
+        // The raw ParseError points at a hashed file in the cache directory,
+        // which tells the author nothing about which template to open.
+        $this->template('broken', "@if(true)\nno end\n");
+
+        try {
+            $this->views->render('broken');
+            $this->fail('expected the render to fail');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('broken', $e->getMessage());
+            $this->assertStringContainsString('unclosed directive', $e->getMessage());
+            $this->assertInstanceOf(\ParseError::class, $e->getPrevious());
+        }
     }
 }

@@ -145,6 +145,82 @@ Drivers: MySQL/MariaDB, PostgreSQL, SQLite, SQL Server.
 
 ---
 
+## Models
+
+```php
+final class Post extends Model
+{
+    protected string $table = 'posts';
+
+    // user_id is absent on purpose: ownership comes from the session, not the request body.
+    protected array $fillable = ['title', 'body'];
+    protected array $casts    = ['created_at' => 'datetime'];
+
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+}
+```
+
+Mass assignment is **closed by default and loud**: a key that is not in `$fillable` throws
+`MassAssignmentException` rather than being silently dropped, so a request body cannot reach a
+column nobody listed and you find out at the point of the mistake.
+
+```php
+Post::with('author')->orderBy('created_at', 'DESC')->get();   // one query for the authors, not N
+Post::findOrFail($id);                                        // 404, not a null you have to check
+$post->update(['title' => $title]);                           // dirty tracking: only changed columns
+```
+
+Relations: `hasOne`, `hasMany`, `belongsTo`, `belongsToMany`. Also soft deletes, timestamps,
+attribute casting, and eager loading via `with()`.
+
+### Route model binding
+
+```php
+Route::get('/posts/{post}/edit', [PostController::class, 'edit']);
+
+public function edit(Post $post): ResponseInterface   // the record, not the string "17"
+```
+
+The type hint is the whole declaration. An id that matches nothing is a 404 before the controller
+is constructed, and `getRouteKeyName()` switches the lookup to a slug. This runs in middleware
+rather than in the action for one reason: **authorization runs first**, and a policy asked
+"may this user edit post 7" needs post 7, not the string `"7"`.
+
+---
+
+## Authentication and authorization
+
+```php
+// who are you
+Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'throttle:10,1']);
+
+// may you
+Route::delete('/posts/{post}', [PostController::class, 'destroy'])
+    ->middleware(['web', 'auth', 'can:delete,post']);
+```
+
+Guards answer identity — `SessionGuard` for browsers, `TokenGuard` for APIs — over a
+`UserProvider`, configured in `config/auth.php`. Logging in regenerates the session id, so a fixed
+session cannot survive the privilege change. Passwords are bcrypt or argon2id.
+
+Gates and policies answer permission, and **denial is the default**: an ability with no rule is
+refused, so forgetting to write one locks the door rather than opening it.
+
+```php
+// config/auth.php
+'policies' => [Post::class => PostPolicy::class],
+
+$this->authorize('update', $post);          // in the controller
+@can('update', $post) ... @endcan           // in the view, so the page never offers a 403
+```
+
+The three layers are deliberate duplication: the route is the fence, the controller is the lock,
+and the view is the sign on the door. None of them is trusted to be the only one.
+
+---
 ## Security
 
 Sessions are ordinary objects in the container's scoped bucket — not PHP's `session_*` globals,
@@ -156,8 +232,10 @@ on disk fails to decrypt rather than feeding modified data back in.
 Route::post('/profile', [ProfileController::class, 'update'])->middleware('web');
 ```
 
-The `web` group starts the session and verifies the CSRF token. Other middleware:
-`auth`, `throttle:60,1`, `signed`, `session`.
+The `web` group starts the session, verifies the CSRF token, substitutes route model bindings, and
+publishes `$errors`, `$old`, `$status` and `$currentUser` to every view — so a form can be redrawn
+with what the user typed without every controller passing it along. Other middleware:
+`auth`, `can:update,post`, `throttle:60,1`, `signed`, `bindings`, `session`.
 
 Defaults you get without asking:
 
@@ -192,6 +270,16 @@ $data = Validator::make($request->all(), [
 
 `validated()` returns only fields that had a rule — passing raw input onward after validating a
 subset of it is how mass-assignment bugs happen.
+
+`safe()` returns the same data as an object that reads back as the types the rules just
+established, which is what keeps controllers free of casts under static analysis:
+
+```php
+$input = Validator::make($request->all(), $rules)->safe();
+
+$title = $input->string('title');   // a string, not a mixed you have to cast
+$age   = $input->int('age', 0);     // with a fallback, or it throws
+```
 
 ---
 
@@ -293,20 +381,24 @@ Opt out per package with `app.dont_discover`. The manifest is cached by `kayra o
 ## Quality
 
 ```bash
-php kayra test                                   # 220 unit + feature tests
+php kayra test                                   # 401 unit + feature tests
 vendor/bin/phpunit -c phpunit-psr7.xml           # 145 PSR-7 conformance tests
 vendor/bin/phpstan analyse                       # level 9
 vendor/bin/infection                             # mutation testing (needs pcov/xdebug)
 ```
 
-- **220 tests, 376 assertions** across the container, HTTP layer, routing, templates, security,
-  database and coroutine isolation.
+- **401 tests, 685 assertions** across the container, HTTP layer, routing, templates, security,
+  database, models, authentication, authorization, validation and coroutine isolation.
 - **145 PSR-7 conformance tests** from `php-http/psr7-integration-tests` — written by the PSR
   maintainers, so they check the spec rather than this implementation's idea of it.
-- **PHPStan level 9**, with a baseline that records pre-existing annotation debt and may only
-  shrink. CI fails on any new error.
+- **PHPStan level 9**, with a shrink-only baseline of 157 remaining annotation debts (down from
+  277) — missing generics, callable signatures and mixed casts, none of which change behaviour.
+  Every finding that pointed at a real defect was fixed rather than baselined. CI fails on any
+  new error, so the ratchet turns one way.
 - **CI matrix** covers PHP 8.5 with and without OPcache, with and without Swoole, and re-runs the
-  whole suite against the compiled build.
+  whole suite against the compiled build. A separate job installs with `--no-dev`, builds for
+  production and boots the result over HTTP, because that is the combination a deploy actually
+  runs and no other job would notice it breaking.
 
 `Kayra\Tests\TestCase` boots a fresh application per test so no container state leaks between them.
 
@@ -324,13 +416,12 @@ pin an exact version.
 
 Stated plainly, because a framework that implies capabilities it lacks wastes your time:
 
-**No ORM** (the query builder returns arrays), **no authentication**, no authorization, no cache
-abstraction, no queues, no events, no mail, no file-storage abstraction.
+No cache abstraction, no queues, no events, no mail, no broadcasting, no file-storage abstraction.
 
-The pieces those would build on — container, HTTP, routing, database, sessions, encryption,
-validation — are in place and tested. The ORM is deliberately last: an object-mapping layer
-constrains every schema decision above it, and building one on a foundation still in motion is
-what forces rewrites.
+Everything those would build on — container, HTTP, routing, database, models, migrations,
+sessions, authentication, authorization, encryption, validation — is in place and tested. The
+remaining pieces are mostly integrations with external systems, and each one is a dependency
+decision worth making deliberately rather than early.
 
 ---
 

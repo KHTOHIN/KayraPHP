@@ -16,6 +16,9 @@ final class Definition
      * @param Closure|string|null  $concrete Factory closure, concrete class name, or null to build $id itself.
      * @param list<string>         $tags
      */
+    /**
+     * @param (Closure(Container, array<string, mixed>): mixed)|class-string|null $concrete
+     */
     public function __construct(
         public string $id,
         public Closure|string|null $concrete = null,

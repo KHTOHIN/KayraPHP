@@ -2,19 +2,26 @@
 
 declare(strict_types=1);
 
+use Kayra\Foundation\Providers\AuthServiceProvider;
+use Kayra\Foundation\Providers\CacheServiceProvider;
 use Kayra\Foundation\Providers\DatabaseServiceProvider;
+use Kayra\Foundation\Providers\EventServiceProvider;
 use Kayra\Foundation\Providers\FoundationServiceProvider;
 use Kayra\Foundation\Providers\RoutingServiceProvider;
 use Kayra\Foundation\Providers\SecurityServiceProvider;
 use Kayra\Foundation\Providers\ViewServiceProvider;
+use Kayra\Http\Middleware\Authenticate;
+use Kayra\Http\Middleware\Authorize;
 use Kayra\Http\Middleware\HandleCors;
 use Kayra\Http\Middleware\MethodOverride;
 use Kayra\Http\Middleware\SecurityHeaders;
+use Kayra\Http\Middleware\ShareViewState;
 use Kayra\Http\Middleware\StartSession;
 use Kayra\Http\Middleware\ThrottleRequests;
 use Kayra\Http\Middleware\TrustProxies;
 use Kayra\Http\Middleware\ValidateHost;
 use Kayra\Http\Middleware\ValidateSignature;
+use Kayra\Routing\SubstituteBindings;
 use Kayra\Http\Middleware\VerifyCsrfToken;
 
 return [
@@ -60,10 +67,13 @@ return [
 
     'providers' => [
         FoundationServiceProvider::class,
+        EventServiceProvider::class,
+        CacheServiceProvider::class,
         RoutingServiceProvider::class,
         ViewServiceProvider::class,
         SecurityServiceProvider::class,
         DatabaseServiceProvider::class,
+        AuthServiceProvider::class,
 
         App\Providers\AppServiceProvider::class,
     ],
@@ -106,7 +116,12 @@ return [
     */
 
     'middleware_aliases' => [
-        'auth'     => App\Middlewares\AuthMiddleware::class,
+        // `auth` uses the default guard; `auth:api` names one explicitly.
+        'auth'      => Authenticate::class,
+
+        // The demo API route's own middleware, kept as a worked example of
+        // writing one by hand. Real applications use 'auth'.
+        'auth.demo' => App\Middlewares\AuthMiddleware::class,
 
         // `throttle:60,1` — 60 requests per minute. Parameters after the colon
         // reach the middleware constructor.
@@ -114,9 +129,24 @@ return [
 
         'signed'   => ValidateSignature::class,
 
+        // `can:update,post` — the ability, then route parameters to pass on.
+        'can'      => Authorize::class,
+
         // A name may map to an ordered list, which makes it a middleware group.
         // 'web' is the one to put on anything that renders a form.
-        'session'  => [StartSession::class],
-        'web'      => [StartSession::class, VerifyCsrfToken::class],
+        // ShareViewState comes after the session so it can read what the last
+        // request flashed, and after CSRF so a rejected request never pays for
+        // the user lookup.
+        // Turns `{post}` into the Post record for any action that type-hints
+        // one. It has to run before `can:`, or a policy would be handed an id.
+        'bindings' => SubstituteBindings::class,
+
+        'session'  => [StartSession::class, ShareViewState::class, SubstituteBindings::class],
+        'web'      => [
+            StartSession::class,
+            VerifyCsrfToken::class,
+            ShareViewState::class,
+            SubstituteBindings::class,
+        ],
     ],
 ];
